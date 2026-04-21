@@ -1,0 +1,344 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+
+// 4.9:
+// s 37
+// h 0.09
+// f 80
+// sp 75
+//
+// 4.1:
+// 34
+// h 0.08
+// f 85
+// sp 80
+//
+// 3.5
+// 32
+// 0.07
+// 85
+// 80
+//
+//3.0
+//30
+//0.065
+//85
+//80
+//
+//2.5
+//29
+//0.055
+//85
+//80
+
+
+
+
+
+
+package frc.robot;
+
+import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+
+import static edu.wpi.first.units.Units.Value;
+
+import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.wpilibj2.command.Command;
+import frc.lib.team9410.PowerRobotContainer;
+import edu.wpi.first.wpilibj2.command.InstantCommand;
+import edu.wpi.first.wpilibj2.command.ParallelRaceGroup;
+import edu.wpi.first.wpilibj2.command.SequentialCommandGroup;
+import edu.wpi.first.wpilibj2.command.WaitCommand;
+import frc.robot.subsystems.StateMachine;
+import frc.robot.subsystems.StateMachine.RobotState;
+import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
+import frc.robot.commands.VelocitySysId;
+import frc.robot.constants.AutoConstants;
+import frc.robot.constants.FieldConstants;
+import frc.robot.Constants.Auto;
+import frc.robot.commands.StrafeCommand;
+import frc.robot.commands.SwerveDriveCommand;
+import frc.robot.commands.TurnToPointCommand;
+
+public class RobotContainer implements PowerRobotContainer {
+
+  // --- Other ---
+  private final StateMachine stateMachine = new StateMachine();
+  private AutoPath auto;
+  /**
+   * Game timer: counts up from 0 to 2 minutes 40 seconds (160 s). Start via
+   * {@link #startGameTimer()}.
+   */
+
+  public static final double GAME_DURATION_SECONDS = 2 * 60 + 40; // 2:40
+
+  // Controller
+  private final CommandXboxController driverController = new CommandXboxController(0);
+
+  private final VelocitySysId shooterSysId = new VelocitySysId(stateMachine.shooter, "Shooter");
+  private final VelocitySysId feederSysId = new VelocitySysId(stateMachine.feeder, "Feeder");
+  private final VelocitySysId spindexerSysId = new VelocitySysId(stateMachine.spindexer, "Spindexer");
+
+  public RobotContainer() {
+    configureBindings();
+
+    SmartDashboard.putBoolean("Red Left Auto", true);
+    SmartDashboard.putBoolean("Red Right Auto", false);
+    SmartDashboard.putBoolean("Blue Left Auto", false);
+    SmartDashboard.putBoolean("Blue Right Auto", false);
+
+    // SysId: start log, run 4 tests per mechanism (quasistatic/dynamic, fwd/rev),
+    // then stop log
+    SmartDashboard.putData("SysId/Start Log", VelocitySysId.startLog());
+    SmartDashboard.putData("SysId/Stop Log", VelocitySysId.stopLog());
+    SmartDashboard.putData("SysId/Shooter Quasistatic Forward",
+        shooterSysId.quasistatic(SysIdRoutine.Direction.kForward));
+    SmartDashboard.putData("SysId/Shooter Quasistatic Reverse",
+        shooterSysId.quasistatic(SysIdRoutine.Direction.kReverse));
+    SmartDashboard.putData("SysId/Shooter Dynamic Forward", shooterSysId.dynamic(SysIdRoutine.Direction.kForward));
+    SmartDashboard.putData("SysId/Shooter Dynamic Reverse", shooterSysId.dynamic(SysIdRoutine.Direction.kReverse));
+    SmartDashboard.putData("SysId/Feeder Quasistatic Forward",
+        feederSysId.quasistatic(SysIdRoutine.Direction.kForward));
+    SmartDashboard.putData("SysId/Feeder Quasistatic Reverse",
+        feederSysId.quasistatic(SysIdRoutine.Direction.kReverse));
+    SmartDashboard.putData("SysId/Feeder Dynamic Forward", feederSysId.dynamic(SysIdRoutine.Direction.kForward));
+    SmartDashboard.putData("SysId/Feeder Dynamic Reverse", feederSysId.dynamic(SysIdRoutine.Direction.kReverse));
+    SmartDashboard.putData("SysId/Spindexer Quasistatic Forward",
+        spindexerSysId.quasistatic(SysIdRoutine.Direction.kForward));
+    SmartDashboard.putData("SysId/Spindexer Quasistatic Reverse",
+        spindexerSysId.quasistatic(SysIdRoutine.Direction.kReverse));
+    SmartDashboard.putData("SysId/Spindexer Dynamic Forward", spindexerSysId.dynamic(SysIdRoutine.Direction.kForward));
+    SmartDashboard.putData("SysId/Spindexer Dynamic Reverse", spindexerSysId.dynamic(SysIdRoutine.Direction.kReverse));
+  }
+
+  public void resetState() {
+    stateMachine.setWantedState(RobotState.READY);
+  }
+
+  private void configureBindings() {
+    // Intake in and out
+    driverController.leftTrigger(0.5).and(() -> !driverController.rightTrigger(0.5).getAsBoolean())
+        // .or(driverController.leftTrigger(0.5))
+        .onTrue(new InstantCommand(
+            () -> {
+              stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_MAX);
+              stateMachine.intakeRoller.setVelocity(145);
+            }))
+        .onFalse(new InstantCommand(
+            () -> {
+              stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_IDLE);
+              stateMachine.intakeRoller.brake();
+            }));
+
+    driverController.leftTrigger(0.5).and(() -> driverController.rightTrigger(0.5).getAsBoolean())
+        // .or(driverController.leftTrigger(0.5))
+        .onTrue(new InstantCommand(
+            () -> {
+              stateMachine.intakeRoller.setVelocity(145);
+            }))
+        .onFalse(new InstantCommand(
+            () -> {
+              stateMachine.intakeRoller.brake();
+            }));
+
+    // driverController.rightTrigger(0.5).onTrue(new InstantCommand(
+    //     () -> {
+    //       stateMachine.setWantedState(RobotState.SHOOTING);
+    //     })).onFalse(new InstantCommand(
+    //         () -> {
+    //           stateMachine.setWantedState(RobotState.READY);
+    //         }));
+
+    // driverController.rightTrigger(0.5).onTrue(new SequentialCommandGroup(
+    //     new InstantCommand(() -> stateMachine.shooterHood.setPositionRotations((double) PowerRobotContainer.getData("Shooter HoodTarget"))),
+    //     new WaitCommand(0.5),
+    //     new InstantCommand(() -> stateMachine.shooter.setVelocity((double) PowerRobotContainer.getData("ShooterVelocity"))),
+    //     new WaitCommand(0.5),
+    //     new InstantCommand(() -> stateMachine.feeder.setVelocity(-((double) PowerRobotContainer.getData("FeederVelocity")))),
+    //     new WaitCommand(0.5),
+    //     new InstantCommand(() -> stateMachine.spindexer.setVelocity(75))
+    //   )
+    // ).onFalse(new InstantCommand(() -> {
+    //   stateMachine.feeder.brake();
+    //   stateMachine.shooter.brake();
+    //   stateMachine.spindexer.brake();
+    //   stateMachine.shooterHood.setPositionRotations(0.0);
+    // }));
+
+    driverController.rightTrigger(0.5)
+      .onTrue(new InstantCommand(()->{
+        stateMachine.setWantedState(RobotState.SHOOTING);
+      }))
+      .onFalse(new InstantCommand(() -> stateMachine.setWantedState(RobotState.READY)));
+
+    driverController.y()
+        .onTrue(new InstantCommand(
+            () -> {
+              stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_FEED);
+              stateMachine.intakeRoller.setVelocity(-145);
+            }))
+        .onFalse(new InstantCommand(
+            () -> {
+              stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_IDLE);
+              stateMachine.intakeRoller.brake();
+            }));
+
+    driverController.back().onTrue(new InstantCommand(
+        () -> {
+          stateMachine.resetGyro();
+        }));
+    driverController.a().onTrue(new InstantCommand(
+      () -> stateMachine.resetGyro()
+    ));
+
+    driverController.b()
+        .onTrue(new InstantCommand(
+            () -> {
+              stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_MAX);
+              stateMachine.intakeRoller.setVelocity(-145);
+            }))
+        .onFalse(new InstantCommand(
+            () -> {
+              stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_IDLE);
+              stateMachine.intakeRoller.brake();
+            }));
+
+
+    stateMachine.drivetrain.setDefaultCommand(new SwerveDriveCommand(stateMachine.drivetrain, driverController, false, stateMachine));
+
+  }
+
+  public AutoPath getAutoPathFromDash() {
+    if (SmartDashboard.getBoolean("Red Left Auto", false) && auto != AutoPath.RED_LEFT) {
+      return AutoPath.RED_LEFT;
+    } else if (SmartDashboard.getBoolean("Red Right Auto", false) && auto != AutoPath.RED_RIGHT) {
+      return AutoPath.RED_RIGHT;
+    } else if (SmartDashboard.getBoolean("Blue Left Auto", false) && auto != AutoPath.BLUE_LEFT) {
+      return AutoPath.BLUE_LEFT;
+    } else if (SmartDashboard.getBoolean("Blue Right Auto", false) && auto != AutoPath.BLUE_RIGHT) {
+      return AutoPath.BLUE_RIGHT;
+    } else {
+      return null;
+    }
+  }
+
+  public void setAuto() {
+    AutoPath newAuto = getAutoPathFromDash();
+    if (newAuto == null) {
+      return;
+    }
+
+    auto = newAuto;
+
+    clearAutoSelections();
+    switch (auto) {
+      case RED_LEFT:
+        SmartDashboard.putBoolean("Red Left Auto", true);
+        break;
+      case RED_RIGHT:
+        SmartDashboard.putBoolean("Red Right Auto", true);
+        break;
+      case BLUE_LEFT:
+        SmartDashboard.putBoolean("Blue Left Auto", true);
+        break;
+      case BLUE_RIGHT:
+        SmartDashboard.putBoolean("Blue Right Auto", true);
+        break;
+    }
+  }
+
+  public Command getAutonomousCommand() {
+
+    switch (auto) {
+      case RED_LEFT:
+        return getRedLeftAuto();
+      case RED_RIGHT:
+        return getRedRightAuto();
+      case BLUE_LEFT:
+        return getBlueLeftAuto();
+      case BLUE_RIGHT:
+        return getBlueRightAuto();
+      default:
+        return new InstantCommand(
+            () -> System.out.println("Invalid auto"));
+    }
+  }
+
+  public static enum AutoPath {
+    RED_LEFT,
+    RED_RIGHT,
+    BLUE_LEFT,
+    BLUE_RIGHT
+  }
+
+  /** Builds the standard quadrant auto sequence with the given 7 poses. */
+  private Command buildQuadrantAuto(
+      Pose2d p1, Pose2d p2, Pose2d p3, Pose2d p4, Pose2d p5, Pose2d p6, Pose2d p7) {
+    return new SequentialCommandGroup(
+        new SwerveDriveCommand(stateMachine.drivetrain, driverController, true, p1, 6.0, 0.5),
+        new SwerveDriveCommand(stateMachine.drivetrain, driverController, true, p2, 6.0, 1.0, true),
+        new InstantCommand(
+            () -> {
+              stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_MAX);
+              stateMachine.intakeRoller.setVelocity(145);
+            }),
+        new SwerveDriveCommand(stateMachine.drivetrain, driverController, true, p3, 12.0, 0.75),
+        new SwerveDriveCommand(stateMachine.drivetrain, driverController, true, p4, 6.0, 0.75),
+        new SwerveDriveCommand(stateMachine.drivetrain, driverController, true, p5, 6.0, 0.4),
+        new InstantCommand(
+            () -> {
+              stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_IDLE);
+              stateMachine.intakeRoller.brake();
+            }),
+        new SwerveDriveCommand(stateMachine.drivetrain, driverController, true, p6, 3.0, 0.75),
+        new SwerveDriveCommand(stateMachine.drivetrain, driverController, true, p7, 3.0, 1.0, true),
+        new ParallelRaceGroup(
+          new TurnToPointCommand(stateMachine.drivetrain,
+            DriverStation.getAlliance().get() == DriverStation.Alliance.Blue ? FieldConstants.HOPPER_BLUE
+                : FieldConstants.HOPPER_RED,
+            3),
+          new WaitCommand(1.0) // terminate turn to point after 1 second if it doesnt finish
+        ),
+        new InstantCommand(() -> stateMachine.setWantedState(RobotState.SHOOTING)));
+  }
+
+  public Command getRedLeftAuto() {
+    return buildQuadrantAuto(
+        AutoConstants.RED_LEFT_1, AutoConstants.RED_LEFT_2, AutoConstants.RED_LEFT_3,
+        AutoConstants.RED_LEFT_4, AutoConstants.RED_LEFT_5, AutoConstants.RED_LEFT_6, AutoConstants.RED_LEFT_7);
+  }
+
+  public Command getRedRightAuto() {
+    return buildQuadrantAuto(
+        AutoConstants.RED_RIGHT_1, AutoConstants.RED_RIGHT_2, AutoConstants.RED_RIGHT_3,
+        AutoConstants.RED_RIGHT_4, AutoConstants.RED_RIGHT_5, AutoConstants.RED_RIGHT_6, AutoConstants.RED_RIGHT_7);
+  }
+
+  public Command getBlueLeftAuto() {
+    return buildQuadrantAuto(
+        AutoConstants.BLUE_LEFT_1, AutoConstants.BLUE_LEFT_2, AutoConstants.BLUE_LEFT_3,
+        AutoConstants.BLUE_LEFT_4, AutoConstants.BLUE_LEFT_5, AutoConstants.BLUE_LEFT_6, AutoConstants.BLUE_LEFT_7);
+  }
+
+  public Command getBlueRightAuto() {
+    return buildQuadrantAuto(
+        AutoConstants.BLUE_RIGHT_1, AutoConstants.BLUE_RIGHT_2, AutoConstants.BLUE_RIGHT_3,
+        AutoConstants.BLUE_RIGHT_4, AutoConstants.BLUE_RIGHT_5, AutoConstants.BLUE_RIGHT_6, AutoConstants.BLUE_RIGHT_7);
+  }
+
+  public StateMachine getStateMachine() {
+    return stateMachine;
+  }
+
+  public void clearAutoSelections() {
+    SmartDashboard.putBoolean("Blue Right Auto", false);
+    SmartDashboard.putBoolean("Blue Left Auto", false);
+    SmartDashboard.putBoolean("Red Right Auto", false);
+    SmartDashboard.putBoolean("Red Left Auto", false);
+  }
+}
