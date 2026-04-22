@@ -10,5 +10,5 @@ public class VisionConstants {
 
   public static final String LEFT_TABLE = "limelight-left";
   public static final String RIGHT_TABLE = "limelight-right";
-  public static final String TURRET_TABLE = "limelight-turret";
+  public static final String SHOOTER_TABLE = "limelight-shooter";
 }

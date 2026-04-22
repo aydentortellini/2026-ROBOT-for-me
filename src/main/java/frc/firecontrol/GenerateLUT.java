@@ -11,7 +11,7 @@ public class GenerateLUT {
         0.47,    // drag coeff  — smooth sphere, don't change
         0.2,     // Magnus coeff       — don't change
         1.225,   // air density kg/m³  — don't change
-        0.938784,    //EXIT HEIGHT (m)    — floor → ball exit point, replace with CAD value
+        0.5715,    //EXIT HEIGHT (m)    — floor → ball exit point, replace with CAD value
         0.0762,  // WHEEL DIAMETER (m) — measure flywheel with calipers, replace with actual
         1.83,    //— hopper opening height
         0.6,     // slip factor — good starting point, tune on robot later
@@ -25,7 +25,7 @@ public class GenerateLUT {
     double maxHoodDeg = 54.0; 
 
     var sim = new ProjectileSimulator(params);
-    ShotLUT lut = sim.generateVariableAngleShotLUT(minHoodDeg, maxHoodDeg, 1.0);
+    ShotLUT lut = sim.generateVariableAngleShotLUT(minHoodDeg, maxHoodDeg, 0);
 
     // Distances match the existing TurretConstants entries
     double[] distances = { 2.5, 3.0, 3.5, 4.1, 4.9 };

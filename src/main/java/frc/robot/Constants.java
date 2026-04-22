@@ -21,8 +21,7 @@ public final class Constants {
   public static final class Spindexer extends frc.robot.constants.SpindexerConstants {}
   public static final class Feeder extends frc.robot.constants.FeederConstants {}
   public static final class Shooter extends frc.robot.constants.ShooterConstants {}
-  public static final class LED extends frc.robot.constants.LEDConstants {}
-  public static final class Turret extends frc.robot.constants.TurretConstants {}
-  public static final class Field extends frc.robot.constants.FieldConstants {}
+  public static final class Shot    extends frc.robot.constants.ShotConstants     {}
+  public static final class Field   extends frc.robot.constants.FieldConstants    {}
   public static final class Sweep extends frc.robot.constants.SweepConstants {}
 }

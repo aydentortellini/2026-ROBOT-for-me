@@ -24,7 +24,7 @@ public class Robot extends TimedRobot {
 
   private final RobotContainer m_robotContainer;
 
-  /** Full-field ball physics sim. Only created in simulation. */
+  // Full-field ball physics sim. Only created in simulation.
   private FuelPhysicsSim ballSim = null;
   private int simBallCooldown = 0;
 
@@ -110,7 +110,7 @@ public class Robot extends TimedRobot {
     ballSim.configureRobot(
         0.70, // robot width along Y axis (m)
         0.70, // robot length along X axis (m)
-        0.10, // bumper height (m)
+        0.1016, // bumper height (m)
         () -> sm.drivetrain.getState().Pose,
         () -> ChassisSpeeds.fromRobotRelativeSpeeds(
             sm.drivetrain.getState().Speeds,
@@ -135,7 +135,7 @@ public class Robot extends TimedRobot {
     }
 
     // Compute launch vector from the SOTM result
-    var pose    = sm.drivetrain.getState().Pose;
+    var pose = sm.drivetrain.getState().Pose;
     // Rear of robot = pose.getRotation() + PI (physically where the shooter points)
     double heading = pose.getRotation().getRadians() + Math.PI;
 

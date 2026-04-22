@@ -49,7 +49,6 @@ public class Dashboard extends SubsystemBase {
   private void updateTestingDashboard() {
     testingTable.getEntry("robotState").setString(PowerRobotContainer.getData("robotState", "robotState is null"));
     // testingTable.getEntry("robotPose").setValue(PowerRobotContainer.getData("robotPose", "robotPose is null"));
-    testingTable.getEntry("ledColor").setString(PowerRobotContainer.getData("ledColor", "ledColor is null"));
     testingTable.getEntry("timeToShift").setDouble(PowerRobotContainer.getData("timeToShift", -1.0));
 
     testingTable.getEntry("matchTime").setDouble(DriverStation.getMatchTime());

@@ -4,8 +4,6 @@
 
 package frc.robot.subsystems;
 
-import java.nio.file.FileSystem;
-import java.util.Map;
 import java.util.Optional;
 
 import com.ctre.phoenix6.Utils;
@@ -13,18 +11,16 @@ import com.ctre.phoenix6.Utils;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.geometry.Pose2d;
-import edu.wpi.first.math.geometry.Rotation2d;
+
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.networktables.StructArrayPublisher;
 import edu.wpi.first.networktables.StructPublisher;
-import edu.wpi.first.util.datalog.StructLogEntry;
-import edu.wpi.first.wpilibj.DataLogManager;
+
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.firecontrol.ShotCalculator;
@@ -35,11 +31,10 @@ import frc.lib.team9410.subsystems.VelocityTorqueSubsystem;
 import frc.robot.Constants;
 import frc.robot.constants.ShooterConstants;
 import frc.robot.constants.TunerConstants;
-import frc.robot.constants.TurretConstants;
+import frc.robot.constants.ShotConstants;
 import frc.robot.utils.FieldUtils.GameZone;
 import frc.robot.utils.FieldUtils;
 import frc.robot.utils.LimelightHelpers;
-import frc.robot.utils.TurretHelpers;
 
 // Subsystem that holds high-level robot state and drives transitions.
 public class StateMachine extends SubsystemBase {
@@ -64,6 +59,7 @@ public class StateMachine extends SubsystemBase {
   public final VelocitySubsystem feeder = new VelocitySubsystem(Constants.Feeder.FEEDER_CONFIG);
 
   private final Vision vision = new Vision();
+  @SuppressWarnings("unused")
   private final Dashboard dashboard = new Dashboard();
 
   public final Swerve drivetrain = TunerConstants.createDrivetrain();
@@ -102,7 +98,7 @@ public class StateMachine extends SubsystemBase {
     cfg.minScoringDistance = 0.5;
     cfg.maxScoringDistance = 5.0;
     shotCalc = new ShotCalculator(cfg);
-    shotCalc.loadShotLUT(TurretConstants.SHOT_LUT);
+    shotCalc.loadShotLUT(ShotConstants.SHOT_LUT);
   }
 
   @Override
@@ -159,7 +155,7 @@ public class StateMachine extends SubsystemBase {
       double rollDeg    = drivetrain.getPigeon2().getRoll().getValueAsDouble();
       LimelightHelpers.SetRobotOrientation(Constants.Vision.LEFT_TABLE,   gyroYawDeg, 0, pitchDeg, 0, rollDeg, 0);
       LimelightHelpers.SetRobotOrientation(Constants.Vision.RIGHT_TABLE,  gyroYawDeg, 0, pitchDeg, 0, rollDeg, 0);
-      LimelightHelpers.SetRobotOrientation(Constants.Vision.TURRET_TABLE, gyroYawDeg, 0, pitchDeg, 0, rollDeg, 0);
+      LimelightHelpers.SetRobotOrientation(Constants.Vision.SHOOTER_TABLE, gyroYawDeg, 0, pitchDeg, 0, rollDeg, 0);
 
       LimelightHelpers.PoseEstimate mt2 = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2(bestLimelight);
       if (mt2 != null && mt2.tagCount > 0) {
@@ -186,8 +182,6 @@ public class StateMachine extends SubsystemBase {
         }
       }
     }
-      Translation2d translationToPoint = drivetrain.getState().Pose.getTranslation().minus(Constants.Field.HOPPER_RED);
-      double linearDistance = translationToPoint.getNorm();
 
       // PowerRobotContainer.setData("distanceToHopper", linearDistance);
       SmartDashboard.putNumber("currentPoseX", drivetrain.getState().Pose.getX());
@@ -281,13 +275,8 @@ public class StateMachine extends SubsystemBase {
     ChassisSpeeds robotVel = drivetrain.getState().Speeds;
     ChassisSpeeds fieldVel = ChassisSpeeds.fromRobotRelativeSpeeds(robotVel, pose.getRotation());
 
-    // hubForward: unit vector from target toward field center so "behind hub" detection works
-    Translation2d fieldCenter = new Translation2d(8.75, 4.0);
-    Translation2d toCenter = fieldCenter.minus(target);
-    double toCenterNorm = toCenter.getNorm();
-    Translation2d hubForward = toCenterNorm > 0.01
-        ? toCenter.div(toCenterNorm)
-        : new Translation2d(1, 0);
+    // hubForward = (0,0) disables behind-hub check (2026 hopper has no "back side")
+    Translation2d hubForward = new Translation2d(0, 0);
 
     LimelightHelpers.PoseEstimate latestMT2 = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2(bestLimelight);
     double visionConf = (latestMT2 != null && latestMT2.tagCount > 0) ? 1.0 : 0.5;
@@ -304,12 +293,13 @@ public class StateMachine extends SubsystemBase {
       double hoodDeg = shotCalc.getHoodAngle(lastSOTMResult.solvedDistanceM());
       hoodPos = hoodDeg / 360.0;
     } else {
-      shooterVelo = TurretConstants.SHOOTER_VELOCITY_INTERPOLATOR.getInterpolatedValue(distance);
-      hoodPos = TurretConstants.HOOD_ANGLE_INTERPOLATOR.getInterpolatedValue(distance);
+      shooterVelo = ShotConstants.SHOOTER_VELOCITY_INTERPOLATOR.getInterpolatedValue(distance);
+      hoodPos = ShotConstants.HOOD_ANGLE_INTERPOLATOR.getInterpolatedValue(distance);
     }
 
     // Update static aim angle (used by SwerveDriveCommand as fallback).
-    staticAimAngleDeg = Math.toDegrees(TurretHelpers.getRadiansToPoint(pose, target)) + 180.0;
+    staticAimAngleDeg = Math.toDegrees(Math.atan2(
+        target.getY() - pose.getY(), target.getX() - pose.getX())) + 180.0;
 
     double actualShooterVelo = shooter.getVelocityMotor().getRotorVelocity().getValueAsDouble();
     SmartDashboard.putNumber("shooterVelocity", shooterVelo);
@@ -322,7 +312,7 @@ public class StateMachine extends SubsystemBase {
     SmartDashboard.putBoolean("sotmValid", lastSOTMResult.isValid());
 
     boolean slowSpindexer = SmartDashboard.getBoolean("slowSpindexer", false);
-    boolean slowShooter   = SmartDashboard.getBoolean("slowShooter", false);
+
     boolean slowFeeder    = SmartDashboard.getBoolean("slowFeeder", false);
 
     // if (!slowShooter) {

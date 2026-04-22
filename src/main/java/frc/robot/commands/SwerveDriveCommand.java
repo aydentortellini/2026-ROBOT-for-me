@@ -6,17 +6,12 @@ package frc.robot.commands;
 
 import static edu.wpi.first.units.Units.*;
 
-import com.ctre.phoenix6.swerve.SwerveModule;
-import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
-import com.ctre.phoenix6.swerve.SwerveModule.ModuleRequest;
-
-import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
-import edu.wpi.first.math.kinematics.SwerveModuleState;
+
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
@@ -26,8 +21,8 @@ import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import frc.robot.utils.DriveUtil;
 import frc.robot.utils.FieldUtils;
 import frc.robot.utils.FieldUtils.GameZone;
-import frc.robot.utils.TurretHelpers;
-import frc.lib.team9410.PowerRobotContainer;
+
+
 import frc.robot.Constants;
 import frc.robot.constants.LocationConstants;
 import frc.robot.constants.OIConstants;
@@ -205,10 +200,6 @@ public class SwerveDriveCommand extends Command {
         : 1.0;
     Pose2d targetPose = new Pose2d();
     targetPose = requestedPose;
-    ChassisSpeeds currentChassisSpeeds = drivetrain.getState().Speeds;
-    double currentSpeed = Math.sqrt(
-        Math.pow(currentChassisSpeeds.vxMetersPerSecond, 2) + Math.pow(currentChassisSpeeds.vyMetersPerSecond, 2));
-
     if (controller.rightTrigger(0.5).getAsBoolean() && stateMachine != null
         && stateMachine.getCurrentState() == RobotState.SHOOTING) {
       boolean isInverted = SmartDashboard.getBoolean("driveInverted", false);
@@ -296,7 +287,8 @@ public class SwerveDriveCommand extends Command {
         } else {
           // Fallback: fresh static aim from current pose toward hopper
           Translation2d target = isBlueAlliance() ? Constants.Field.HOPPER_BLUE : Constants.Field.HOPPER_RED;
-          aimDeg = Math.toDegrees(TurretHelpers.getRadiansToPoint(drivetrain.getState().Pose, target)) + 180.0;
+          Pose2d pose = drivetrain.getState().Pose;
+          aimDeg = Math.toDegrees(Math.atan2(target.getY() - pose.getY(), target.getX() - pose.getX())) + 180.0;
         }
         double opPerspDeg = isBlueAlliance() ? 0.0 : 180.0;
         double adjustedAimDeg = aimDeg - opPerspDeg;

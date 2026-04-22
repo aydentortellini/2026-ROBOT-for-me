@@ -171,13 +171,7 @@ public class RobotContainer implements PowerRobotContainer {
               stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_IDLE);
               stateMachine.intakeRoller.brake();
             }));
-
-
-    // D-pad: trim shooter speed up/down by 0.5 rps per press; left = reset trim to 0
-    driverController.povUp().onTrue(new InstantCommand(() -> stateMachine.getShotCalc().adjustOffset(0.5)));
-    driverController.povDown().onTrue(new InstantCommand(() -> stateMachine.getShotCalc().adjustOffset(-0.5)));
-    driverController.povLeft().onTrue(new InstantCommand(() -> stateMachine.getShotCalc().resetOffset()));
-
+ 
     stateMachine.drivetrain.setDefaultCommand(new SwerveDriveCommand(stateMachine.drivetrain, driverController, false, stateMachine));
 
   }
@@ -245,7 +239,7 @@ public class RobotContainer implements PowerRobotContainer {
     BLUE_RIGHT
   }
 
-  /** Builds the standard quadrant auto sequence with the given 7 poses. */
+  // Builds the standard quadrant auto sequence with the given 7 poses. 
   private Command buildQuadrantAuto(
       Pose2d p1, Pose2d p2, Pose2d p3, Pose2d p4, Pose2d p5, Pose2d p6, Pose2d p7) {
     return new SequentialCommandGroup(
