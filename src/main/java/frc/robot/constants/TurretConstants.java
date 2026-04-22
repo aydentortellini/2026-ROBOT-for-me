@@ -52,29 +52,55 @@ public class TurretConstants {
             TURRET_MOTOR_CONFIGS, TURRET_LEAD_CONFIG, TURRET_CANCODER_CONFIG, TURRET_MOTION_MAGIC_CONFIG,
             "Turret", "degrees", Optional.of(TURRET_DEFAULT));
 
-    public static final double[][] HOOD_ANGLES = {
-            { 4.9, 0.09 },
-            { 4.1, 0.08 },
-            { 3.5, 0.07 },
-            { 3.0, 0.065 },
-            { 2.5, 0.055 }
-    };
 
-    public static final double[][] SHOOTER_SPEEDS = {
-             { 4.9, 37 },
-             { 4.1, 34 },
-             { 3.5, 32 },
-             { 3.0, 29.5 }, // 30
-             { 2.5, 28.5 } // 29
-    };
 
-    public static final double[][] FEEDER_SPEEDS = {
-        { 4.9, 80 },
-        { 4.1, 85 },
-        { 3.5, 85 },
-        { 3.0, 85 },
-        { 2.5, 85 },
-    };
+        public static final double[][] SHOOTER_SPEEDS = {
+                { 2.5, 41.6992 },
+                { 3.0, 44.6289 },
+                { 3.5, 47.2656 },
+                { 4.1, 50.4883 },
+                { 4.9, 54.5898 },
+        };
+
+        public static final double[][] HOOD_ANGLES = {
+                { 2.5, 0.14667 },  // 52.8 deg
+                { 3.0, 0.13833 },  // 49.8 deg
+                { 3.5, 0.13833 },  // 49.8 deg
+                { 4.1, 0.13278 },  // 47.8 deg
+                { 4.9, 0.13000 },  // 46.8 deg
+        };
+
+        public static final double[][] SHOOTER_TOF = {
+                { 2.5, 0.717 },
+                { 3.0, 0.758 },
+                { 3.5, 0.841 },
+                { 4.1, 0.892 },
+                { 4.9, 0.979 },
+        };
+
+//     public static final double[][] HOOD_ANGLES = {
+//             { 4.9, 0.09 },
+//             { 4.1, 0.08 },
+//             { 3.5, 0.07 },
+//             { 3.0, 0.065 },
+//             { 2.5, 0.055 }
+//     };
+
+//     public static final double[][] SHOOTER_SPEEDS = {
+//              { 4.9, 37 },
+//              { 4.1, 34 },
+//              { 3.5, 32 },
+//              { 3.0, 29.5 }, // 30
+//              { 2.5, 28.5 } // 29
+//     };
+
+//     public static final double[][] FEEDER_SPEEDS = {
+//         { 4.9, 80 },
+//         { 4.1, 85 },
+//         { 3.5, 85 },
+//         { 3.0, 85 },
+//         { 2.5, 85 },
+//     };
 
     public static final double TURRET_DIST_FROM_ROBOT_CENTER = -0.15875;
     public static final double TURRET_RADIUS = 0.11596; //.127
@@ -88,25 +114,11 @@ public class TurretConstants {
 
     public static final LinearInterpolator HOOD_ANGLE_INTERPOLATOR = new LinearInterpolator(HOOD_ANGLES);
     public static final LinearInterpolator SHOOTER_VELOCITY_INTERPOLATOR = new LinearInterpolator(SHOOTER_SPEEDS);
-    public static final LinearInterpolator FEEDER_VELOCITY_INTERPOLATOR = new LinearInterpolator(FEEDER_SPEEDS);
 
     public static final double TURRET_CAMERA_Y_OFFSET = 0.0;
 
-    /**
-     * Estimated time-of-flight (seconds) at each distance. These match the distance
-     * keys in SHOOTER_SPEEDS / HOOD_ANGLES. Tune on robot by watching where shots land
-     * when driving — if shots miss behind the target, increase TOF values; if they miss
-     * in front, decrease them.
-     */
-    public static final double[][] SHOOTER_TOF = {
-        { 2.5, 0.42 },
-        { 3.0, 0.50 },
-        { 3.5, 0.57 },
-        { 4.1, 0.64 },
-        { 4.9, 0.73 },
-    };
 
-    /**
+    /*
      * Combined lookup table (distance → rps, hood angle, TOF) for ShotCalculator.
      * Merges SHOOTER_SPEEDS, HOOD_ANGLES, and SHOOTER_TOF at each known distance.
      * Hood angle is in degrees (converted from the rotations scale used by the hood motor:

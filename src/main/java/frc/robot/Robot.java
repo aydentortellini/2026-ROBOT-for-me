@@ -136,15 +136,17 @@ public class Robot extends TimedRobot {
 
     // Compute launch vector from the SOTM result
     var pose    = sm.drivetrain.getState().Pose;
-    // Shooter faces rear (Math.PI offset matches shooterAngleOffsetRad in ShotCalculator.Config)
+    // Rear of robot = pose.getRotation() + PI (physically where the shooter points)
     double heading = pose.getRotation().getRadians() + Math.PI;
-    // Exit speed: rps * wheel circumference * slip factor (0.127m wheel, 0.7 slip — tune to robot)
-    double exitSpeedMps = result.rpm() * Math.PI * 0.127 * 0.7;
-    // Hood angle from ShotCalculator (degrees) drives the vertical component
-    double hoodAngleDeg = sm.getShotCalc().getHoodAngle(result.solvedDistanceM());
-    double hoodRad = Math.toRadians(hoodAngleDeg > 0 ? hoodAngleDeg : 16.2); // fallback ~0.045 rot
-    double horzSpeed = exitSpeedMps * Math.cos(hoodRad);
-    double vertSpeed = exitSpeedMps * Math.sin(hoodRad);
+
+    // Use the LUT time-of-flight and solved distance to derive physically accurate
+    // launch velocities — this matches the real robot's tuned trajectory data exactly.
+    //   horzSpeed = distance / tof        (covers the range in tof seconds)
+    //   vertSpeed = g * tof / 2           (symmetric parabola, launch height ≈ land height)
+    double tof      = result.timeOfFlightSec() > 0 ? result.timeOfFlightSec() : 0.75;
+    double distance = result.solvedDistanceM() > 0 ? result.solvedDistanceM() : 3.0;
+    double horzSpeed = distance / tof;
+    double vertSpeed = (9.81 * tof) / 2.0;
 
     Translation3d launchPos = new Translation3d(
         pose.getX() - 0.20 * Math.cos(pose.getRotation().getRadians()), // rear offset

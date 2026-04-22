@@ -2,42 +2,6 @@
 // Open Source Software; you can modify and/or share it under the terms of
 // the WPILib BSD license file in the root directory of this project.
 
-
-// 4.9:
-// s 37
-// h 0.09
-// f 80
-// sp 75
-//
-// 4.1:
-// 34
-// h 0.08
-// f 85
-// sp 80
-//
-// 3.5
-// 32
-// 0.07
-// 85
-// 80
-//
-//3.0
-//30
-//0.065
-//85
-//80
-//
-//2.5
-//29
-//0.055
-//85
-//80
-
-
-
-
-
-
 package frc.robot;
 
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
@@ -208,6 +172,11 @@ public class RobotContainer implements PowerRobotContainer {
               stateMachine.intakeRoller.brake();
             }));
 
+
+    // D-pad: trim shooter speed up/down by 0.5 rps per press; left = reset trim to 0
+    driverController.povUp().onTrue(new InstantCommand(() -> stateMachine.getShotCalc().adjustOffset(0.5)));
+    driverController.povDown().onTrue(new InstantCommand(() -> stateMachine.getShotCalc().adjustOffset(-0.5)));
+    driverController.povLeft().onTrue(new InstantCommand(() -> stateMachine.getShotCalc().resetOffset()));
 
     stateMachine.drivetrain.setDefaultCommand(new SwerveDriveCommand(stateMachine.drivetrain, driverController, false, stateMachine));
 

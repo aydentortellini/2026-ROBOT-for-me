@@ -211,18 +211,25 @@ public class SwerveDriveCommand extends Command {
 
     if (controller.rightTrigger(0.5).getAsBoolean() && stateMachine != null
         && stateMachine.getCurrentState() == RobotState.SHOOTING) {
-      // SOTM: allow translation while locking heading to the computed aim angle
       boolean isInverted = SmartDashboard.getBoolean("driveInverted", false);
       double inversionMultiplier = isInverted ? -1.0 : 1.0;
       final ChassisSpeeds speeds = DriveUtil.calculateSpeedsBasedOnJoystickInputs(
           controller, drivetrain, MAX_ANGULAR_RATE, SKEW_COMPENSATION);
       double xSpeed = speeds.vxMetersPerSecond * OIConstants.MAX_SPEED_COEFFICIENT * inversionMultiplier;
       double ySpeed = speeds.vyMetersPerSecond * OIConstants.MAX_SPEED_COEFFICIENT * inversionMultiplier;
+
       var sotmResult = stateMachine.getLastSOTMResult();
-      double aimDeg = sotmResult.isValid()
+      boolean usingSOTM = sotmResult.isValid();
+      double aimDeg = usingSOTM
           ? sotmResult.driveAngle().getDegrees()
           : stateMachine.getStaticAimAngleDeg();
-      drivetrain.drive(xSpeed, ySpeed, aimDeg, DriveMode.ROTATION_LOCK);
+      double opPerspDeg = isBlueAlliance() ? 0.0 : 180.0;
+      double adjustedAimDeg = aimDeg - opPerspDeg;
+      SmartDashboard.putNumber("aimDeg", aimDeg);
+      SmartDashboard.putNumber("adjustedAimDeg", adjustedAimDeg);
+      SmartDashboard.putBoolean("usingSOTM", usingSOTM);
+      SmartDashboard.putNumber("robotHeadingDeg", drivetrain.getState().Pose.getRotation().getDegrees());
+      drivetrain.drive(xSpeed, ySpeed, adjustedAimDeg, DriveMode.ROTATION_LOCK);
     } else if (controller.rightTrigger(0.5).getAsBoolean()) {
       drivetrain.drive(0.0, 0.0, 0.0, DriveMode.BRAKE);
     } else if (currentPose != null && targetPose != null && (autoDrive || requestedPose != null)) {
@@ -280,41 +287,37 @@ public class SwerveDriveCommand extends Command {
       // System.out.println("isInverted: "+inversionMultiplier);
 
       if (controller.a().getAsBoolean()) {
-        Translation2d targetPoint = isBlueAlliance() ? Constants.Field.HOPPER_BLUE : Constants.Field.HOPPER_RED;
-        // Get the robot's current position on the field
-        Translation2d robotPosition = drivetrain.getState().Pose.getTranslation();
+        // TEMP: A alone = SOTM aim (no trigger required)
+        var sotmResult = stateMachine != null ? stateMachine.getLastSOTMResult() : null;
+        boolean usingSOTM = sotmResult != null && sotmResult.isValid();
+        double aimDeg;
+        if (usingSOTM) {
+          aimDeg = sotmResult.driveAngle().getDegrees();
+        } else {
+          // Fallback: fresh static aim from current pose toward hopper
+          Translation2d target = isBlueAlliance() ? Constants.Field.HOPPER_BLUE : Constants.Field.HOPPER_RED;
+          aimDeg = Math.toDegrees(TurretHelpers.getRadiansToPoint(drivetrain.getState().Pose, target)) + 180.0;
+        }
+        double opPerspDeg = isBlueAlliance() ? 0.0 : 180.0;
+        double adjustedAimDeg = aimDeg - opPerspDeg;
+        SmartDashboard.putNumber("aimDeg", aimDeg);
+        SmartDashboard.putBoolean("usingSOTM", usingSOTM);
+        drivetrain.drive(
+            xSpeed * inversionMultiplier,
+            ySpeed * inversionMultiplier,
+            adjustedAimDeg,
+            Swerve.DriveMode.ROTATION_LOCK);
 
-        // Find the vector from the robot to the target
-        double deltaX = targetPoint.getX() - robotPosition.getX();
-        double deltaY = targetPoint.getY() - robotPosition.getY();
-        // double deltaDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-
-        // Find the angle from the robot to the target in field coordinates
-        double targetAngleFieldRelative = Math.atan2(deltaY, deltaX);
-
-        double targetAngleRobotRelative = !isBlueAlliance()
-            ? Rotation2d.fromRadians(targetAngleFieldRelative).getDegrees()
-            : Rotation2d.fromRadians(targetAngleFieldRelative).rotateBy(Rotation2d.fromDegrees(180)).getDegrees();
-
-        // System.out.println(Rotation2d.fromRadians(targetAngleFieldRelative).getDegrees());
-
-        // Pose2d pose = drivetrain.getState().Pose;
-        // double targetDrivetrainRotation = Math.toDegrees(TurretHelpers.getRadiansToPoint(pose, targetPoint));
-        // double currentDivetrainRotation = pose.getRotation().rotateBy(Rotation2d.fromDegrees(180)).getDegrees();
-        // double angleDiff = MathUtil.inputModulus(targetDrivetrainRotation - currentDivetrainRotation, -180, 180);
-
-        // TODO: set delta distance is set low, tune to needs
-        // prob should also test it
-        // if (angleDiff < 5.0 && deltaDistance < 0.1) {
-        //   drivetrain.drive(0.0, 0.0, 0.0, DriveMode.BRAKE);
-        // } else {
-        System.out.println(targetAngleRobotRelative);
-          drivetrain.drive(
-              xSpeed * inversionMultiplier,
-              ySpeed * inversionMultiplier,
-              targetAngleRobotRelative,
-              Swerve.DriveMode.ROTATION_LOCK);
-        // }
+        // -- old static-point A button code (kept for reference) --
+        // Translation2d targetPoint = isBlueAlliance() ? Constants.Field.HOPPER_BLUE : Constants.Field.HOPPER_RED;
+        // Translation2d robotPosition = drivetrain.getState().Pose.getTranslation();
+        // double deltaX = targetPoint.getX() - robotPosition.getX();
+        // double deltaY = targetPoint.getY() - robotPosition.getY();
+        // double targetAngleFieldRelative = Math.atan2(deltaY, deltaX);
+        // double targetAngleRobotRelative = Rotation2d.fromRadians(targetAngleFieldRelative).rotateBy(Rotation2d.fromDegrees(180)).getDegrees();
+        // double opPerspDeg = isBlueAlliance() ? 0.0 : 180.0;
+        // double adjustedTargetAngle = targetAngleRobotRelative - opPerspDeg;
+        // drivetrain.drive(xSpeed * inversionMultiplier, ySpeed * inversionMultiplier, adjustedTargetAngle, Swerve.DriveMode.ROTATION_LOCK);
 
       } else {
         drivetrain.drive(

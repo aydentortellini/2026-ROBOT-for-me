@@ -41,7 +41,7 @@ import frc.robot.utils.FieldUtils;
 import frc.robot.utils.LimelightHelpers;
 import frc.robot.utils.TurretHelpers;
 
-/** Subsystem that holds high-level robot state and drives transitions. */
+// Subsystem that holds high-level robot state and drives transitions.
 public class StateMachine extends SubsystemBase {
 
   public enum RobotState {
@@ -53,11 +53,11 @@ public class StateMachine extends SubsystemBase {
   private RobotState currentState = RobotState.READY;
   private RobotState previousState = RobotState.READY;
 
-  // --- Position subsystems ---
+  // Position subsystems
   public final PositionSubsystem shooterHood = new PositionSubsystem(Constants.Shooter.HOOD_CONFIG);
   public final PositionSubsystem intakeWrist = new PositionSubsystem(Constants.Intake.WRIST_CONFIG);
 
-  // --- Velocity subsystems ---
+  // Velocity subsystems
   public final VelocitySubsystem shooter = new VelocitySubsystem(Constants.Shooter.FLYWHEEL_CONFIG);
   public final VelocityTorqueSubsystem intakeRoller = new VelocityTorqueSubsystem(Constants.Intake.ROLLER_CONFIG);
   public final VelocitySubsystem spindexer = new VelocitySubsystem(Constants.Spindexer.SPINDEXER_CONFIG);
@@ -68,13 +68,13 @@ public class StateMachine extends SubsystemBase {
 
   public final Swerve drivetrain = TunerConstants.createDrivetrain();
 
-  // --- Shoot-on-the-move fire control ---
+  //Shoot-on-the-move fire control
   private final ShotCalculator shotCalc;
   private ShotCalculator.LaunchParameters lastSOTMResult = ShotCalculator.LaunchParameters.INVALID;
-  /** Static aim angle (degrees) toward current target — updated each shooting cycle. */
+  //Static aim angle (degrees) toward current target — updated each shooting cycle.
   private double staticAimAngleDeg = 0.0;
 
-  // --- AdvantageScope / NT pose publishing ---
+  //NT pose publishing
   private final StructPublisher<Pose2d> posePublisher =
       NetworkTableInstance.getDefault()
           .getStructTopic("Robot/Pose", Pose2d.struct)
@@ -95,9 +95,9 @@ public class StateMachine extends SubsystemBase {
 
   public StateMachine() {
     ShotCalculator.Config cfg = new ShotCalculator.Config();
-    cfg.launcherOffsetX = 0.20;         // meters forward of robot center — measure from CAD
+    cfg.launcherOffsetX = -0.20;        // negative — shooter is behind robot center
     cfg.launcherOffsetY = 0.0;
-    cfg.shooterAngleOffsetRad = Math.PI; // shooter faces rear (matches existing +180° aim logic)
+    cfg.shooterAngleOffsetRad = Math.PI; // shooter faces rear
     cfg.maxSOTMSpeed = 3.0;
     cfg.minScoringDistance = 0.5;
     cfg.maxScoringDistance = 5.0;
@@ -152,7 +152,14 @@ public class StateMachine extends SubsystemBase {
     if (bestLimelight == null || bestLimelight.isEmpty()) {
       // Skip vision pose update; dashboard/PRC still use current drivetrain pose below.
     } else {
-      vision.setRobotPose(bestLimelight, drivetrain);
+      // SetRobotOrientation MUST use the gyro yaw (not vision-derived yaw) so MegaTag2 can
+      // correctly resolve the 3D pose on both alliances. Call it for all cameras every loop.
+      double gyroYawDeg = drivetrain.getState().Pose.getRotation().getDegrees();
+      double pitchDeg   = drivetrain.getPigeon2().getPitch().getValueAsDouble();
+      double rollDeg    = drivetrain.getPigeon2().getRoll().getValueAsDouble();
+      LimelightHelpers.SetRobotOrientation(Constants.Vision.LEFT_TABLE,   gyroYawDeg, 0, pitchDeg, 0, rollDeg, 0);
+      LimelightHelpers.SetRobotOrientation(Constants.Vision.RIGHT_TABLE,  gyroYawDeg, 0, pitchDeg, 0, rollDeg, 0);
+      LimelightHelpers.SetRobotOrientation(Constants.Vision.TURRET_TABLE, gyroYawDeg, 0, pitchDeg, 0, rollDeg, 0);
 
       LimelightHelpers.PoseEstimate mt2 = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2(bestLimelight);
       if (mt2 != null && mt2.tagCount > 0) {
@@ -233,15 +240,8 @@ public class StateMachine extends SubsystemBase {
   }
 
   private void executeShooting() {
-    String bestLimelight = vision.getBestLimelight();
-    Pose2d pose = drivetrain.getState().Pose;
-    LimelightHelpers.PoseEstimate mt2 = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2(bestLimelight);
-
-    if (mt2 != null && mt2.tagCount > 0) {
-        pose = mt2.pose;
-    }
-
     intakeTimer++;
+    Pose2d pose = drivetrain.getState().Pose;
     GameZone zone = FieldUtils.getZone(pose);
     boolean inOurZone = getAllianceZone() == zone;
 
@@ -270,16 +270,9 @@ public class StateMachine extends SubsystemBase {
     }
   }
 
-  /** Runs shooter, hood, feeder, and spindexer toward the given target (hopper or corner). */
+  // Runs shooter, hood, feeder, and spindexer toward the given target (hopper or corner).
   private void runShootingToTarget(Translation2d target) {
-    String bestLimelight = vision.getBestLimelight();
     Pose2d pose = drivetrain.getState().Pose;
-    LimelightHelpers.PoseEstimate mt2 = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2(bestLimelight);
-
-    if (mt2 != null && mt2.tagCount > 0) {
-        pose = mt2.pose;
-    }
-
     double distance = pose.getTranslation().minus(target).getNorm();
     SmartDashboard.putNumber("distanceToHopper", distance);
 
@@ -296,7 +289,8 @@ public class StateMachine extends SubsystemBase {
         ? toCenter.div(toCenterNorm)
         : new Translation2d(1, 0);
 
-    double visionConf = (mt2 != null && mt2.tagCount > 0) ? 1.0 : 0.5;
+    LimelightHelpers.PoseEstimate latestMT2 = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2(bestLimelight);
+    double visionConf = (latestMT2 != null && latestMT2.tagCount > 0) ? 1.0 : 0.5;
     ShotCalculator.ShotInputs inputs = new ShotCalculator.ShotInputs(
         pose, fieldVel, robotVel, target, hubForward, visionConf);
     lastSOTMResult = shotCalc.calculate(inputs);
@@ -315,11 +309,15 @@ public class StateMachine extends SubsystemBase {
     }
 
     // Update static aim angle (used by SwerveDriveCommand as fallback).
-    // +180° because the shooter faces the REAR of the robot.
     staticAimAngleDeg = Math.toDegrees(TurretHelpers.getRadiansToPoint(pose, target)) + 180.0;
 
+    double actualShooterVelo = shooter.getVelocityMotor().getRotorVelocity().getValueAsDouble();
     SmartDashboard.putNumber("shooterVelocity", shooterVelo);
+    SmartDashboard.putNumber("shooterVelocityActual", actualShooterVelo);
+    SmartDashboard.putNumber("shooterVelocityError", shooterVelo - actualShooterVelo);
     SmartDashboard.putNumber("shooterHoodPos", hoodPos);
+    SmartDashboard.putNumber("shooterHoodPosActual", shooterHood.getPositionRotations());
+    SmartDashboard.putNumber("rpmOffset", shotCalc.getOffset());
     SmartDashboard.putNumber("sotmConfidence", lastSOTMResult.confidence());
     SmartDashboard.putBoolean("sotmValid", lastSOTMResult.isValid());
 
@@ -327,18 +325,30 @@ public class StateMachine extends SubsystemBase {
     boolean slowShooter   = SmartDashboard.getBoolean("slowShooter", false);
     boolean slowFeeder    = SmartDashboard.getBoolean("slowFeeder", false);
 
-    if (!slowShooter) {
-      shooterVelo += 1;
-    }
+    // if (!slowShooter) {
+    //   shooterVelo += 1; // old tuning hack — disabled, FireControl already sets correct RPM
+    // }
 
     shooter.setVelocity(shooterVelo);
     shooterHood.setPositionRotations(
         MathUtil.clamp(hoodPos, ShooterConstants.SHOOTER_HOOD_MIN, ShooterConstants.SHOOTER_HOOD_MAX));
 
-    feeder.setVelocity(slowFeeder ? -60 : -2 * shooterVelo);
+    // Heading gate: only feed/spin when robot is aimed within tolerance
+    double targetHeadingRad = lastSOTMResult.isValid()
+        ? lastSOTMResult.driveAngle().getRadians()
+        : Math.toRadians(staticAimAngleDeg);
+    double headingErrorDeg = Math.abs(Math.toDegrees(
+        MathUtil.angleModulus(pose.getRotation().getRadians() - targetHeadingRad)));
+    boolean headingOK = headingErrorDeg < 5.0; // degrees — tune this
+    SmartDashboard.putNumber("headingErrorDeg", headingErrorDeg);
+    SmartDashboard.putBoolean("headingOK", headingOK);
 
-    double velocityThreshold = TurretConstants.SHOOTER_VELOCITY_INTERPOLATOR.getInterpolatedValue(distance) - 1.5;
-    if (shooter.getVelocityMotor().getRotorVelocity().getValueAsDouble() > velocityThreshold) {
+    // double velocityThreshold = TurretConstants.SHOOTER_VELOCITY_INTERPOLATOR.getInterpolatedValue(distance) - 1.5; // old — fought FireControl
+    double velocityThreshold = shooterVelo - 1.5;
+    boolean shooterAtSpeed = shooter.getVelocityMotor().getRotorVelocity().getValueAsDouble() > velocityThreshold;
+
+    if (headingOK && shooterAtSpeed) {
+      feeder.setVelocity(slowFeeder ? -60 : -2 * shooterVelo);
       spindexer.setVelocity(slowSpindexer ? 70 : 80);
     } else {
       feeder.brake();
@@ -346,12 +356,12 @@ public class StateMachine extends SubsystemBase {
     }
   }
 
-  /** Latest SOTM fire-control result. Updated every shooting cycle. */
+  // Latest SOTM fire-control result. Updated every shooting cycle. */
   public ShotCalculator.LaunchParameters getLastSOTMResult() {
     return lastSOTMResult;
   }
 
-  /** The ShotCalculator instance (used by simulation to query hood angles etc.). */
+  // The ShotCalculator instance (used by simulation to query hood angles etc.). */
   public ShotCalculator getShotCalc() {
     return shotCalc;
   }
