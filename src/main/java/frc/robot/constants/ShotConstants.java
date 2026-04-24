@@ -10,11 +10,11 @@ public class ShotConstants {
 
     // Shooter Tables
     public static final double[][] SHOOTER_SPEEDS = {
-        { 2.5, 57.0 },
-        { 3.0, 59.0 },
-        { 3.5, 64.0 },
-        { 4.1, 68.0 },
-        { 4.9, 74.0 },
+        { 2.5, 28.5 },
+        { 3.0, 29.5 },
+        { 3.5, 32.0 },
+        { 4.1, 34.0 },
+        { 4.9, 37.0 },
     };
 
     public static final double[][] HOOD_ANGLES = {

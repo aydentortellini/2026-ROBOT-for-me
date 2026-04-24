@@ -50,7 +50,6 @@ public class Robot extends TimedRobot {
     SignalLogger.writeDouble("Voltage", RobotController.getBatteryVoltage(), "V");
     SignalLogger.writeDouble("CAN Utilization", RobotController.getCANStatus().percentBusUtilization, "%");
     SignalLogger.writeDouble("CAN Error Count", RobotController.getCANStatus().receiveErrorCount, "#");
-    // m_robotContainer.getStateMachine().setRobotPose();
     m_robotContainer.setAuto();
     CommandScheduler.getInstance().run();
   }
@@ -139,14 +138,20 @@ public class Robot extends TimedRobot {
     // Rear of robot = pose.getRotation() + PI (physically where the shooter points)
     double heading = pose.getRotation().getRadians() + Math.PI;
 
-    // Use the LUT time-of-flight and solved distance to derive physically accurate
-    // launch velocities — this matches the real robot's tuned trajectory data exactly.
-    //   horzSpeed = distance / tof        (covers the range in tof seconds)
-    //   vertSpeed = g * tof / 2           (symmetric parabola, launch height ≈ land height)
+    // Ball speed is derived from shooter RPS so that changing the LUT values
+    // actually affects the trajectory. Vertical comes from TOF (arc shape),
+    // horizontal is whatever remains from the total speed.
+    //   totalSpeed = rps * RPS_TO_SPEED
+    //   vertSpeed  = g * tof / 2  (symmetric parabola)
+    //   horzSpeed  = sqrt(totalSpeed² - vertSpeed²)
+    // RPS_TO_SPEED ≈ 0.175 m/s per RPS — calibrated so default LUT (28.5 RPS at 2.5 m)
+    // produces the correct horizontal distance. Tune alongside the real robot LUT.
+    final double RPS_TO_SPEED = 0.175;
+    double rps      = result.rpm(); // stored as RPS despite field name
     double tof      = result.timeOfFlightSec() > 0 ? result.timeOfFlightSec() : 0.75;
-    double distance = result.solvedDistanceM() > 0 ? result.solvedDistanceM() : 3.0;
-    double horzSpeed = distance / tof;
-    double vertSpeed = (9.81 * tof) / 2.0;
+    double totalSpeed = rps * RPS_TO_SPEED;
+    double vertSpeed  = (9.81 * tof) / 2.0;
+    double horzSpeed  = Math.sqrt(Math.max(0, totalSpeed * totalSpeed - vertSpeed * vertSpeed));
 
     Translation3d launchPos = new Translation3d(
         pose.getX() - 0.20 * Math.cos(pose.getRotation().getRadians()), // rear offset

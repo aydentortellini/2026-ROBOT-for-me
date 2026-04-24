@@ -56,7 +56,7 @@ public class TurnToPointCommand extends Command {
 
     double targetAngleRobotRelative = !isBlueAlliance()
         ? Rotation2d.fromRadians(targetAngleFieldRelative).getDegrees()
-        : Rotation2d.fromRadians(targetAngleFieldRelative).rotateBy(Rotation2d.fromDegrees(180)).getDegrees();
+        : Rotation2d.fromRadians(targetAngleFieldRelative + Math.PI).getDegrees();
 
     this.targetRotationToPoint = Rotation2d.fromDegrees(targetAngleRobotRelative);
 

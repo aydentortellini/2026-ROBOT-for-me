@@ -6,11 +6,7 @@ package frc.robot;
 
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import edu.wpi.first.wpilibj.DriverStation;
-import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-
-import static edu.wpi.first.units.Units.Value;
-
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.wpilibj2.command.Command;
 import frc.lib.team9410.PowerRobotContainer;
@@ -24,7 +20,6 @@ import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import frc.robot.commands.VelocitySysId;
 import frc.robot.constants.AutoConstants;
 import frc.robot.constants.FieldConstants;
-import frc.robot.Constants.Auto;
 import frc.robot.commands.StrafeCommand;
 import frc.robot.commands.SwerveDriveCommand;
 import frc.robot.commands.TurnToPointCommand;
@@ -87,7 +82,6 @@ public class RobotContainer implements PowerRobotContainer {
   private void configureBindings() {
     // Intake in and out
     driverController.leftTrigger(0.5).and(() -> !driverController.rightTrigger(0.5).getAsBoolean())
-        // .or(driverController.leftTrigger(0.5))
         .onTrue(new InstantCommand(
             () -> {
               stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_MAX);
@@ -98,48 +92,15 @@ public class RobotContainer implements PowerRobotContainer {
               stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_IDLE);
               stateMachine.intakeRoller.brake();
             }));
-
-    driverController.leftTrigger(0.5).and(() -> driverController.rightTrigger(0.5).getAsBoolean())
-        // .or(driverController.leftTrigger(0.5))
-        .onTrue(new InstantCommand(
-            () -> {
-              stateMachine.intakeRoller.setVelocity(145);
-            }))
-        .onFalse(new InstantCommand(
-            () -> {
-              stateMachine.intakeRoller.brake();
-            }));
-
-    // driverController.rightTrigger(0.5).onTrue(new InstantCommand(
-    //     () -> {
-    //       stateMachine.setWantedState(RobotState.SHOOTING);
-    //     })).onFalse(new InstantCommand(
-    //         () -> {
-    //           stateMachine.setWantedState(RobotState.READY);
-    //         }));
-
-    // driverController.rightTrigger(0.5).onTrue(new SequentialCommandGroup(
-    //     new InstantCommand(() -> stateMachine.shooterHood.setPositionRotations((double) PowerRobotContainer.getData("Shooter HoodTarget"))),
-    //     new WaitCommand(0.5),
-    //     new InstantCommand(() -> stateMachine.shooter.setVelocity((double) PowerRobotContainer.getData("ShooterVelocity"))),
-    //     new WaitCommand(0.5),
-    //     new InstantCommand(() -> stateMachine.feeder.setVelocity(-((double) PowerRobotContainer.getData("FeederVelocity")))),
-    //     new WaitCommand(0.5),
-    //     new InstantCommand(() -> stateMachine.spindexer.setVelocity(75))
-    //   )
-    // ).onFalse(new InstantCommand(() -> {
-    //   stateMachine.feeder.brake();
-    //   stateMachine.shooter.brake();
-    //   stateMachine.spindexer.brake();
-    //   stateMachine.shooterHood.setPositionRotations(0.0);
-    // }));
-
+  
+  //Shooting
     driverController.rightTrigger(0.5)
       .onTrue(new InstantCommand(()->{
         stateMachine.setWantedState(RobotState.SHOOTING);
       }))
       .onFalse(new InstantCommand(() -> stateMachine.setWantedState(RobotState.READY)));
 
+    //Outake
     driverController.y()
         .onTrue(new InstantCommand(
             () -> {
@@ -152,27 +113,14 @@ public class RobotContainer implements PowerRobotContainer {
               stateMachine.intakeRoller.brake();
             }));
 
-    driverController.back().onTrue(new InstantCommand(
+    //Reset Gyro
+      driverController.back().onTrue(new InstantCommand(
         () -> {
           stateMachine.resetGyro();
         }));
-    driverController.a().onTrue(new InstantCommand(
-      () -> stateMachine.resetGyro()
-    ));
 
-    driverController.b()
-        .onTrue(new InstantCommand(
-            () -> {
-              stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_MAX);
-              stateMachine.intakeRoller.setVelocity(-145);
-            }))
-        .onFalse(new InstantCommand(
-            () -> {
-              stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_IDLE);
-              stateMachine.intakeRoller.brake();
-            }));
- 
-    stateMachine.drivetrain.setDefaultCommand(new SwerveDriveCommand(stateMachine.drivetrain, driverController, false, stateMachine));
+    //DriveTrain
+      stateMachine.drivetrain.setDefaultCommand(new SwerveDriveCommand(stateMachine.drivetrain, driverController, false, stateMachine));
 
   }
 

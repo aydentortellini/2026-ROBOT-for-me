@@ -214,13 +214,10 @@ public class SwerveDriveCommand extends Command {
       double aimDeg = usingSOTM
           ? sotmResult.driveAngle().getDegrees()
           : stateMachine.getStaticAimAngleDeg();
-      double opPerspDeg = isBlueAlliance() ? 0.0 : 180.0;
-      double adjustedAimDeg = aimDeg - opPerspDeg;
       SmartDashboard.putNumber("aimDeg", aimDeg);
-      SmartDashboard.putNumber("adjustedAimDeg", adjustedAimDeg);
       SmartDashboard.putBoolean("usingSOTM", usingSOTM);
       SmartDashboard.putNumber("robotHeadingDeg", drivetrain.getState().Pose.getRotation().getDegrees());
-      drivetrain.drive(xSpeed, ySpeed, adjustedAimDeg, DriveMode.ROTATION_LOCK);
+      drivetrain.drive(xSpeed, ySpeed, aimDeg, DriveMode.ROTATION_LOCK);
     } else if (controller.rightTrigger(0.5).getAsBoolean()) {
       drivetrain.drive(0.0, 0.0, 0.0, DriveMode.BRAKE);
     } else if (currentPose != null && targetPose != null && (autoDrive || requestedPose != null)) {
@@ -277,47 +274,11 @@ public class SwerveDriveCommand extends Command {
       double inversionMultiplier = isInverted ? -1.0 : 1.0;
       // System.out.println("isInverted: "+inversionMultiplier);
 
-      if (controller.a().getAsBoolean()) {
-        // TEMP: A alone = SOTM aim (no trigger required)
-        var sotmResult = stateMachine != null ? stateMachine.getLastSOTMResult() : null;
-        boolean usingSOTM = sotmResult != null && sotmResult.isValid();
-        double aimDeg;
-        if (usingSOTM) {
-          aimDeg = sotmResult.driveAngle().getDegrees();
-        } else {
-          // Fallback: fresh static aim from current pose toward hopper
-          Translation2d target = isBlueAlliance() ? Constants.Field.HOPPER_BLUE : Constants.Field.HOPPER_RED;
-          Pose2d pose = drivetrain.getState().Pose;
-          aimDeg = Math.toDegrees(Math.atan2(target.getY() - pose.getY(), target.getX() - pose.getX())) + 180.0;
-        }
-        double opPerspDeg = isBlueAlliance() ? 0.0 : 180.0;
-        double adjustedAimDeg = aimDeg - opPerspDeg;
-        SmartDashboard.putNumber("aimDeg", aimDeg);
-        SmartDashboard.putBoolean("usingSOTM", usingSOTM);
-        drivetrain.drive(
-            xSpeed * inversionMultiplier,
-            ySpeed * inversionMultiplier,
-            adjustedAimDeg,
-            Swerve.DriveMode.ROTATION_LOCK);
-
-        // -- old static-point A button code (kept for reference) --
-        // Translation2d targetPoint = isBlueAlliance() ? Constants.Field.HOPPER_BLUE : Constants.Field.HOPPER_RED;
-        // Translation2d robotPosition = drivetrain.getState().Pose.getTranslation();
-        // double deltaX = targetPoint.getX() - robotPosition.getX();
-        // double deltaY = targetPoint.getY() - robotPosition.getY();
-        // double targetAngleFieldRelative = Math.atan2(deltaY, deltaX);
-        // double targetAngleRobotRelative = Rotation2d.fromRadians(targetAngleFieldRelative).rotateBy(Rotation2d.fromDegrees(180)).getDegrees();
-        // double opPerspDeg = isBlueAlliance() ? 0.0 : 180.0;
-        // double adjustedTargetAngle = targetAngleRobotRelative - opPerspDeg;
-        // drivetrain.drive(xSpeed * inversionMultiplier, ySpeed * inversionMultiplier, adjustedTargetAngle, Swerve.DriveMode.ROTATION_LOCK);
-
-      } else {
-        drivetrain.drive(
-            xSpeed * inversionMultiplier,
-            ySpeed * inversionMultiplier,
-            -speeds.omegaRadiansPerSecond,
-            Swerve.DriveMode.FIELD_RELATIVE);
-      }
+      drivetrain.drive(
+          xSpeed * inversionMultiplier,
+          ySpeed * inversionMultiplier,
+          -speeds.omegaRadiansPerSecond,
+          Swerve.DriveMode.FIELD_RELATIVE);
     }
   }
 

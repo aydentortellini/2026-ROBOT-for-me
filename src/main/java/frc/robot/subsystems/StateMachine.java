@@ -243,17 +243,6 @@ public class StateMachine extends SubsystemBase {
         ? (zone == GameZone.BLUE_ALLIANCE ? Constants.Field.HOPPER_BLUE : Constants.Field.HOPPER_RED)
         : getTargetCornerLocation();
 
-    // if (
-    //   !(pose.getTranslation().minus(target).getNorm() > 3.5) && 
-    //   !(vision.getTurretCanSeeTags())
-    // ) {
-    //   feeder.brake();
-    //   spindexer.brake();
-    //   shooter.brake();
-    //   intakeRoller.brake();
-    //   return;
-    // }
-
     runShootingToTarget(target);
     if (intakeWrist.getSetpointRotations() >= Constants.Intake.INTAKE_IDLE) {
       if (intakeTimer % 50 == 0) {
@@ -329,7 +318,7 @@ public class StateMachine extends SubsystemBase {
         : Math.toRadians(staticAimAngleDeg);
     double headingErrorDeg = Math.abs(Math.toDegrees(
         MathUtil.angleModulus(pose.getRotation().getRadians() - targetHeadingRad)));
-    boolean headingOK = headingErrorDeg < 5.0; // degrees — tune this
+    boolean headingOK = headingErrorDeg < (lastSOTMResult.isValid() ? 15.0 : 5.0);
     SmartDashboard.putNumber("headingErrorDeg", headingErrorDeg);
     SmartDashboard.putBoolean("headingOK", headingOK);
 
@@ -356,7 +345,7 @@ public class StateMachine extends SubsystemBase {
     return shotCalc;
   }
 
-  /** Static aim angle (degrees, field frame) toward the current target. Used as heading fallback. */
+  // Static aim angle (degrees, field frame) toward the current target. Used as heading fallback.
   public double getStaticAimAngleDeg() {
     return staticAimAngleDeg;
   }
