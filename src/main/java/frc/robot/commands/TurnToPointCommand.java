@@ -13,7 +13,6 @@ import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
-import frc.robot.Constants;
 import frc.robot.constants.TunerConstants;
 import frc.robot.subsystems.Swerve;
 
@@ -42,24 +41,6 @@ public class TurnToPointCommand extends Command {
     this.targetPoint = point;
     this.rotationTolerance = tolerance;
 
-    Translation2d targetPoint = isBlueAlliance() ? Constants.Field.HOPPER_BLUE : Constants.Field.HOPPER_RED;
-    // Get the robot's current position on the field
-    Translation2d robotPosition = drivetrain.getState().Pose.getTranslation();
-
-    // Find the vector from the robot to the target
-    double deltaX = targetPoint.getX() - robotPosition.getX();
-    double deltaY = targetPoint.getY() - robotPosition.getY();
-    // double deltaDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-
-    // Find the angle from the robot to the target in field coordinates
-    double targetAngleFieldRelative = Math.atan2(deltaY, deltaX);
-
-    double targetAngleRobotRelative = !isBlueAlliance()
-        ? Rotation2d.fromRadians(targetAngleFieldRelative).getDegrees()
-        : Rotation2d.fromRadians(targetAngleFieldRelative + Math.PI).getDegrees();
-
-    this.targetRotationToPoint = Rotation2d.fromDegrees(targetAngleRobotRelative);
-
     addRequirements(drivetrain);
   }
 
@@ -72,6 +53,13 @@ public class TurnToPointCommand extends Command {
   // Called when the command is initially scheduled.
   @Override
   public void initialize() {
+    Translation2d robotPosition = drivetrain.getState().Pose.getTranslation();
+    double deltaX = targetPoint.getX() - robotPosition.getX();
+    double deltaY = targetPoint.getY() - robotPosition.getY();
+    double targetAngleFieldRelative = Math.atan2(deltaY, deltaX);
+    // Blue: add 180° so rear faces target. Red: CTRE operator perspective adds 180° for us.
+    double offset = isBlueAlliance() ? Math.PI : 0.0;
+    targetRotationToPoint = Rotation2d.fromRadians(targetAngleFieldRelative + offset);
   }
 
   // Called every time the scheduler runs while the command is scheduled.

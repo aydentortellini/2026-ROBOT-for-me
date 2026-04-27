@@ -11,18 +11,17 @@ import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.wpilibj2.command.Command;
 import frc.lib.team9410.PowerRobotContainer;
 import edu.wpi.first.wpilibj2.command.InstantCommand;
-import edu.wpi.first.wpilibj2.command.ParallelRaceGroup;
 import edu.wpi.first.wpilibj2.command.SequentialCommandGroup;
 import edu.wpi.first.wpilibj2.command.WaitCommand;
+import frc.robot.commands.TurnToPointCommand;
+import frc.robot.constants.FieldConstants;
 import frc.robot.subsystems.StateMachine;
 import frc.robot.subsystems.StateMachine.RobotState;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import frc.robot.commands.VelocitySysId;
 import frc.robot.constants.AutoConstants;
-import frc.robot.constants.FieldConstants;
 import frc.robot.commands.StrafeCommand;
 import frc.robot.commands.SwerveDriveCommand;
-import frc.robot.commands.TurnToPointCommand;
 
 public class RobotContainer implements PowerRobotContainer {
 
@@ -208,14 +207,12 @@ public class RobotContainer implements PowerRobotContainer {
             }),
         new SwerveDriveCommand(stateMachine.drivetrain, driverController, true, p6, 3.0, 0.75),
         new SwerveDriveCommand(stateMachine.drivetrain, driverController, true, p7, 3.0, 1.0, true),
-        new ParallelRaceGroup(
-          new TurnToPointCommand(stateMachine.drivetrain,
+        new InstantCommand(() -> stateMachine.setWantedState(RobotState.SHOOTING)),
+        new TurnToPointCommand(stateMachine.drivetrain,
             DriverStation.getAlliance().get() == DriverStation.Alliance.Blue ? FieldConstants.HOPPER_BLUE
                 : FieldConstants.HOPPER_RED,
             3),
-          new WaitCommand(1.0) // terminate turn to point after 1 second if it doesnt finish
-        ),
-        new InstantCommand(() -> stateMachine.setWantedState(RobotState.SHOOTING)));
+        new WaitCommand(2.0));
   }
 
   public Command getRedLeftAuto() {
