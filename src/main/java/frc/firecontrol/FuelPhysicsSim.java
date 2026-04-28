@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
+import frc.robot.constants.FieldConstants;
 
 /**
  * Full-field ball physics simulation for FRC 2026 REBUILT. Handles drag, Magnus lift, friction,
@@ -112,8 +113,8 @@ public class FuelPhysicsSim {
 
   // Field geometry
 
-  private static final double FIELD_LENGTH = 16.541; // m
-  private static final double FIELD_WIDTH = 8.052; // m
+  private static final double FIELD_LENGTH = FieldConstants.X_MAX; // m
+  private static final double FIELD_WIDTH = FieldConstants.Y_MAX; // m
 
   // Alliance wall and guardrail heights
   private static final double ALLIANCE_WALL_HEIGHT = 0.935; // 36.8 in

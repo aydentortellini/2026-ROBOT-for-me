@@ -1,6 +1,6 @@
 package frc.firecontrol;
 
-//One-time LUT generator. Run main(),
+//One-time LUT generator. Run (Run as -> Java Application),
  
 public class GenerateLUT {
 
@@ -33,7 +33,7 @@ public class GenerateLUT {
   
     for (double d : distances) {
       ShotParameters p = lut.get(d);
-      System.out.printf("    { %.1f, %.4f },%n", d, p.rpm() / 60.0); // RPM → RPS
+      System.out.printf("    { %.1f, %.4f },%n", d, p.rps() / 60.0); // RPM -> RPS
     }
     System.out.println("};");
 

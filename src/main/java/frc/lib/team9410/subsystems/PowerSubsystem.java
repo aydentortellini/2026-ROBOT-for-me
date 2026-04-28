@@ -67,10 +67,8 @@ public abstract class PowerSubsystem extends SubsystemBase {
           continue; // Theres no leader to follow so no need to continue
         }
 
-        // Reverse it relative to the leader
-        if (motorConfig.isReversed()) {
-          setFollower(motorConfig.canId(), this.leaderCanId, true);
-        }
+        // Always set follower; inversion is relative to leader alignment.
+        setFollower(motorConfig.canId(), this.leaderCanId, motorConfig.isReversed());
       }
     }
   }

@@ -67,9 +67,9 @@ import edu.wpi.first.math.kinematics.ChassisSpeeds;
  */
 public class ShotCalculator {
 
-  /** The result of calculate(). RPM to spin up, time of flight, heading to aim at, and a 0-100 confidence score. */
+  /** The result of calculate(). Shooter RPS, time of flight, heading to aim at, and a 0-100 confidence score. */
   public record LaunchParameters(
-      double rpm,
+      double shooterRps,
       double timeOfFlightSec,
       Rotation2d driveAngle,
       double driveAngularVelocityRadPerSec,
@@ -420,7 +420,7 @@ public class ShotCalculator {
     double effectiveTOF = solvedTOF + config.mechLatencyMs / 1000.0;
 
     // RPM from LUT at solved distance
-    double effectiveRPMValue = effectiveRPM(projDist);
+    double effectiveShooterRps = effectiveRPM(projDist);
 
     // Drive angle: aim at velocity-compensated target position
     double compTargetX;
@@ -473,7 +473,7 @@ public class ShotCalculator {
     previousSpeed = robotSpeed;
 
     return new LaunchParameters(
-        effectiveRPMValue,
+        effectiveShooterRps,
         effectiveTOF,
         driveAngle,
         driveAngularVelocity,

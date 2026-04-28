@@ -186,12 +186,10 @@ public class SwerveDriveCommand extends Command {
     addRequirements(drivetrain);
   }
 
-  // Called when the command is initially scheduled.
   @Override
   public void initialize() {
   }
 
-  // Called every time the scheduler runs while the command is scheduled.
   @Override
   public void execute() {
     final Pose2d currentPose = drivetrain.getState().Pose;
@@ -201,6 +199,19 @@ public class SwerveDriveCommand extends Command {
     Pose2d targetPose = new Pose2d();
     targetPose = requestedPose;
     if (controller.rightTrigger(0.5).getAsBoolean() && stateMachine != null
+        && stateMachine.getCurrentState() == RobotState.PASSING) {
+      boolean isInverted = SmartDashboard.getBoolean("driveInverted", false);
+      double inversionMultiplier = isInverted ? -1.0 : 1.0;
+      final ChassisSpeeds speeds = DriveUtil.calculateSpeedsBasedOnJoystickInputs(
+          controller, drivetrain, MAX_ANGULAR_RATE, SKEW_COMPENSATION);
+      double xSpeed = speeds.vxMetersPerSecond * OIConstants.MAX_SPEED_COEFFICIENT * inversionMultiplier;
+      double ySpeed = speeds.vyMetersPerSecond * OIConstants.MAX_SPEED_COEFFICIENT * inversionMultiplier;
+      double aimDeg = stateMachine.getPassAimAngleDeg();
+      SmartDashboard.putNumber("aimDeg", aimDeg);
+      SmartDashboard.putBoolean("usingSOTM", false);
+      SmartDashboard.putNumber("robotHeadingDeg", drivetrain.getState().Pose.getRotation().getDegrees());
+      drivetrain.drive(xSpeed, ySpeed, aimDeg, DriveMode.ROTATION_LOCK);
+    } else if (controller.rightTrigger(0.5).getAsBoolean() && stateMachine != null
         && stateMachine.getCurrentState() == RobotState.SHOOTING) {
       boolean isInverted = SmartDashboard.getBoolean("driveInverted", false);
       double inversionMultiplier = isInverted ? -1.0 : 1.0;
@@ -221,12 +232,7 @@ public class SwerveDriveCommand extends Command {
     } else if (controller.rightTrigger(0.5).getAsBoolean()) {
       drivetrain.drive(0.0, 0.0, 0.0, DriveMode.BRAKE);
     } else if (currentPose != null && targetPose != null && (autoDrive || requestedPose != null)) {
-      boolean isBlueAlliance = true;
-      if (DriverStation.getAlliance().isPresent()) {
-        if (DriverStation.getAlliance().get() == Alliance.Red) {
-          isBlueAlliance = false;
-        }
-      }
+      boolean isBlueAlliance = DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Blue;
       final double directionMultiplier = isBlueAlliance ? -1.0 : 1.0;
 
       final Translation2d translationToPoint = currentPose.getTranslation().minus(targetPose.getTranslation());
@@ -259,11 +265,6 @@ public class SwerveDriveCommand extends Command {
       double xSpeed = speeds.vxMetersPerSecond * coeff;
       double ySpeed = speeds.vyMetersPerSecond * coeff;
 
-      // if (controller.rightTrigger(0.5).getAsBoolean()){
-      // final double DRIVE_AND_SHOOT_SPEED = 0.0;
-      // xSpeed = xSpeed * DRIVE_AND_SHOOT_SPEED;
-      // ySpeed = ySpeed * DRIVE_AND_SHOOT_SPEED;
-      // } else
       if (controller.leftTrigger(0.5).getAsBoolean()) {
         final double DRIVE_AND_INTAKE_SPEED = 0.4;
         xSpeed = xSpeed * DRIVE_AND_INTAKE_SPEED;
@@ -282,12 +283,10 @@ public class SwerveDriveCommand extends Command {
     }
   }
 
-  // Called once the command ends or is interrupted.
   @Override
   public void end(boolean interrupted) {
   }
 
-  // Returns true when the command should end.
   @Override
   public boolean isFinished() {
     if (requestedPose != null) {
@@ -298,7 +297,7 @@ public class SwerveDriveCommand extends Command {
   }
 
   private double getFieldRelativeTargetRotation(double degrees) {
-    Alliance alliance = DriverStation.getAlliance().get();
+    Alliance alliance = DriverStation.getAlliance().orElse(Alliance.Blue);
 
     if (alliance == Alliance.Red) {
       switch ((int) degrees) {
@@ -325,23 +324,11 @@ public class SwerveDriveCommand extends Command {
         - getFieldRelativeTargetRotation(targetPose.getRotation().getDegrees());
     final double currentVelocity = Math.hypot(speeds.vxMetersPerSecond, speeds.vyMetersPerSecond);
     final double tolerance = poseTolerance > 0 ? poseTolerance : 1;
-    return linearDistance < Units.inchesToMeters(tolerance) && (Math.abs(linearRotation) < 10 || disableRotationLock); // &&
-                                                                                                                       // currentVelocity
-                                                                                                                       // <
-                                                                                                                       // 0.01;
-                                                                                                                       // //
-                                                                                                                       // meters
+    return linearDistance < Units.inchesToMeters(tolerance) && (Math.abs(linearRotation) < 10 || disableRotationLock);
   }
 
-  //
-  //
-  // Game Specific Code
-  //
-  //
-  ///////////////////////////////////////////////////////////
-
   private double getRotation(double speed, StrafeSide side, GameZone zone, Pose2d pose) {
-    Alliance alliance = DriverStation.getAlliance().get();
+    Alliance alliance = DriverStation.getAlliance().orElse(Alliance.Blue);
     double centerLine = getCenterLine(zone);
 
     switch (side) {
@@ -416,7 +403,7 @@ public class SwerveDriveCommand extends Command {
   private double getXInput(StrafeAxis axis, StrafeSide side) {
     Pose2d pose = drivetrain.getState().Pose;
     GameZone zone = FieldUtils.getZone(pose);
-    Alliance alliance = DriverStation.getAlliance().get();
+    Alliance alliance = DriverStation.getAlliance().orElse(Alliance.Blue);
     double strafeLine;
 
     if ((alliance == Alliance.Blue && side == StrafeSide.LEFT)
@@ -439,7 +426,7 @@ public class SwerveDriveCommand extends Command {
   private double getYInput(StrafeAxis axis, StrafeSide side) {
     Pose2d pose = drivetrain.getState().Pose;
     GameZone zone = FieldUtils.getZone(pose);
-    Alliance alliance = DriverStation.getAlliance().get();
+    Alliance alliance = DriverStation.getAlliance().orElse(Alliance.Blue);
     double strafeLine;
 
     switch (zone) {
@@ -560,8 +547,6 @@ public class SwerveDriveCommand extends Command {
 
   /** Convenience: is the robot on the blue alliance? */
   public boolean isBlueAlliance() {
-    if (DriverStation.getAlliance().isEmpty())
-      return true;
-    return DriverStation.getAlliance().get() == Alliance.Blue;
+    return DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Blue;
   }
 }

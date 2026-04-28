@@ -147,7 +147,7 @@ public class Robot extends TimedRobot {
     // RPS_TO_SPEED ≈ 0.175 m/s per RPS — calibrated so default LUT (28.5 RPS at 2.5 m)
     // produces the correct horizontal distance. Tune alongside the real robot LUT.
     final double RPS_TO_SPEED = 0.175;
-    double rps      = result.rpm(); // stored as RPS despite field name
+    double rps      = result.shooterRps();
     double tof      = result.timeOfFlightSec() > 0 ? result.timeOfFlightSec() : 0.75;
     double totalSpeed = rps * RPS_TO_SPEED;
     double vertSpeed  = (9.81 * tof) / 2.0;
@@ -162,7 +162,7 @@ public class Robot extends TimedRobot {
         horzSpeed * Math.sin(heading),
         vertSpeed);
 
-    ballSim.launchBall(launchPos, launchVel, result.rpm() * 60.0); // convert rps→RPM for spin
+    ballSim.launchBall(launchPos, launchVel, result.shooterRps() * 60.0); // convert rps->RPM for spin
     simBallCooldown = 25; // ~0.5 s between spawned balls
   }
 

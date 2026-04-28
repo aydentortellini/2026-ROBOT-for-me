@@ -24,10 +24,10 @@ import edu.wpi.first.math.interpolation.InterpolatingTreeMap;
 import edu.wpi.first.math.interpolation.InverseInterpolator;
 
 /**
- * Distance-keyed lookup table for RPM, hood angle, and TOF. Wraps WPILib's
+ * Distance-keyed lookup table for shooter RPS, hood angle, and TOF. Wraps WPILib's
  * InterpolatingTreeMap so all three stay in sync at any queried distance.
  *
- * <p>If you're using separate InterpolatingDoubleTreeMaps for RPM and TOF,
+ * <p>If you're using separate InterpolatingDoubleTreeMaps for shooter RPS and TOF,
  * this keeps them from drifting apart.
  *
  * <p>Usage:
@@ -38,7 +38,7 @@ import edu.wpi.first.math.interpolation.InverseInterpolator;
  *   lut.put(3.0, 3500, 38.0, 0.78);
  *
  *   ShotParameters shot = lut.get(1.5); // interpolates all three fields
- *   double rpm = shot.rpm();
+ *   double rps = shot.rps();
  *   double angle = shot.angleDeg();
  * </pre>
  */
@@ -60,8 +60,8 @@ public class ShotLUT {
   }
 
   /** Convenience: insert from individual fields. */
-  public void put(double distanceM, double rpm, double angleDeg, double tofSec) {
-    put(distanceM, new ShotParameters(rpm, angleDeg, tofSec));
+  public void put(double distanceM, double rps, double angleDeg, double tofSec) {
+    put(distanceM, new ShotParameters(rps, angleDeg, tofSec));
   }
 
   /**
@@ -73,8 +73,13 @@ public class ShotLUT {
     return result != null ? result : ShotParameters.ZERO;
   }
 
+  public double getRPS(double distanceM) {
+    return get(distanceM).rps();
+  }
+
+  // Backwards-compatible alias for existing call sites.
   public double getRPM(double distanceM) {
-    return get(distanceM).rpm();
+    return getRPS(distanceM);
   }
 
   public double getAngle(double distanceM) {

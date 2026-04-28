@@ -58,13 +58,11 @@ public class StrafeCommand extends Command {
     this(drivetrain, controller, null);
   }
 
-  // Called when the command is initially scheduled.
   @Override
   public void initialize() {
 
   }
 
-  // Called every time the scheduler runs while the command is scheduled.
   @Override
   public void execute() {
     StrafeSide thatSide = side;
@@ -96,12 +94,10 @@ public class StrafeCommand extends Command {
 
   }
 
-  // Called once the command ends or is interrupted.
   @Override
   public void end(boolean interrupted) {
   }
 
-  // Returns true when the command should end.
   @Override
   public boolean isFinished() {
     return false;
@@ -186,7 +182,7 @@ public class StrafeCommand extends Command {
   private double getYInput(StrafeAxis axis, StrafeSide side) {
     Pose2d pose = drivetrain.getState().Pose;
     GameZone zone = FieldUtils.getZone(pose);
-    Alliance alliance = DriverStation.getAlliance().get();
+    Alliance alliance = DriverStation.getAlliance().orElse(Alliance.Blue);
     double strafeLine;
 
     if ((alliance == Alliance.Blue && side == StrafeSide.LEFT)
@@ -211,7 +207,7 @@ public class StrafeCommand extends Command {
   private double getXInput(StrafeAxis axis, StrafeSide side) {
     Pose2d pose = drivetrain.getState().Pose;
     GameZone zone = FieldUtils.getZone(pose);
-    Alliance alliance = DriverStation.getAlliance().get();
+    Alliance alliance = DriverStation.getAlliance().orElse(Alliance.Blue);
     double strafeLine;
 
     switch (zone) {

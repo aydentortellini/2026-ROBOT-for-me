@@ -6,7 +6,6 @@ package frc.robot.subsystems;
 
 import java.util.Optional;
 
-import com.ctre.phoenix6.Utils;
 
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.VecBuilder;
@@ -41,7 +40,10 @@ public class StateMachine extends SubsystemBase {
 
   public enum RobotState {
     READY,
-    SHOOTING
+    INTAKING,
+    OUTTAKING,
+    SHOOTING,
+    PASSING
   }
 
   private RobotState wantedState = RobotState.READY;
@@ -64,13 +66,15 @@ public class StateMachine extends SubsystemBase {
 
   public final Swerve drivetrain = TunerConstants.createDrivetrain();
 
-  //Shoot-on-the-move fire control
+  // Shoot-on-the-move fire control
   private final ShotCalculator shotCalc;
   private ShotCalculator.LaunchParameters lastSOTMResult = ShotCalculator.LaunchParameters.INVALID;
-  //Static aim angle (degrees) toward current target — updated each shooting cycle.
+  // Static aim angle (degrees) toward current target; updated each shooting cycle.
   private double staticAimAngleDeg = 0.0;
+  // Fixed pass-aim heading (degrees, field frame) toward own alliance side.
+  private double passAimAngleDeg = 0.0;
 
-  //NT pose publishing
+  // NT pose publishing
   private final StructPublisher<Pose2d> posePublisher =
       NetworkTableInstance.getDefault()
           .getStructTopic("Robot/Pose", Pose2d.struct)
@@ -119,6 +123,7 @@ public class StateMachine extends SubsystemBase {
 
   
     SmartDashboard.putString("gameZone", FieldUtils.getZone(drivetrain.getState().Pose).name());
+    SmartDashboard.putNumber("passAimDeg", passAimAngleDeg);
     posePublisher.set(drivetrain.getState().Pose);
     moduleStatePublisher.set(drivetrain.getState().ModuleStates);
 
@@ -144,12 +149,10 @@ public class StateMachine extends SubsystemBase {
   public void setRobotPose () {
     bestLimelight = vision.getBestLimelight();
 
-    // Don't use vision when no Limelight has valid data (avoids bad/default pose from empty/wrong table on boot).
+    // Skip vision when no Limelight has valid data.
     if (bestLimelight == null || bestLimelight.isEmpty()) {
-      // Skip vision pose update; dashboard/PRC still use current drivetrain pose below.
     } else {
-      // SetRobotOrientation MUST use the gyro yaw (not vision-derived yaw) so MegaTag2 can
-      // correctly resolve the 3D pose on both alliances. Call it for all cameras every loop.
+      // MegaTag2 needs gyro yaw (not vision yaw) to resolve pose correctly on both alliances.
       double gyroYawDeg = drivetrain.getState().Pose.getRotation().getDegrees();
       double pitchDeg   = drivetrain.getPigeon2().getPitch().getValueAsDouble();
       double rollDeg    = drivetrain.getPigeon2().getRoll().getValueAsDouble();
@@ -160,7 +163,7 @@ public class StateMachine extends SubsystemBase {
       LimelightHelpers.PoseEstimate mt2 = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2(bestLimelight);
       if (mt2 != null && mt2.tagCount > 0) {
         Pose2d newPose = mt2.pose;
-        // Reject poses outside field bounds (e.g. 0,0 or garbage from cold Limelight).
+        // Reject out-of-bounds startup garbage poses.
         double x = newPose.getX();
         double y = newPose.getY();
         if (x < Constants.Field.X_MIN - Constants.Field.TOL || x > Constants.Field.X_MAX + Constants.Field.TOL
@@ -178,7 +181,7 @@ public class StateMachine extends SubsystemBase {
           // }
           // drivetrain.resetPose(newPose);
           drivetrain.setVisionMeasurementStdDevs(VecBuilder.fill(.7, .7, 9999999));
-          drivetrain.addVisionMeasurement(newPose, Utils.fpgaToCurrentTime(mt2.timestampSeconds));
+          drivetrain.addVisionMeasurement(newPose, mt2.timestampSeconds);
         }
       }
     }
@@ -209,8 +212,17 @@ public class StateMachine extends SubsystemBase {
       case READY:
         executeReady();
         break;
+      case INTAKING:
+        executeIntaking();
+        break;
+      case OUTTAKING:
+        executeOuttaking();
+        break;
       case SHOOTING:
         executeShooting();
+        break;
+      case PASSING:
+        executePassing();
         break;
       default:
         break;
@@ -225,6 +237,37 @@ public class StateMachine extends SubsystemBase {
       intakeWrist.setPositionRotations(Constants.Intake.INTAKE_IDLE);
     }
     intakeTimer = 0;
+  }
+
+  private void executeIntaking() {
+    shooter.brake();
+    spindexer.brake();
+    feeder.brake();
+    intakeWrist.setPositionRotations(Constants.Intake.INTAKE_MAX);
+    intakeRoller.setVelocity(145);
+    intakeTimer = 0;
+  }
+
+  private void executeOuttaking() {
+    shooter.brake();
+    spindexer.brake();
+    feeder.brake();
+    intakeWrist.setPositionRotations(Constants.Intake.INTAKE_FEED);
+    intakeRoller.setVelocity(-145);
+    intakeTimer = 0;
+  }
+
+  private void executePassing() {
+    // Start conservative: hold mechanisms and only command heading behavior.
+    shooter.brake();
+    spindexer.brake();
+    feeder.brake();
+    intakeRoller.brake();
+    if (intakeWrist.getSetpointRotations() > Constants.Intake.INTAKE_IDLE) {
+      intakeWrist.setPositionRotations(Constants.Intake.INTAKE_IDLE);
+    }
+    intakeTimer = 0;
+    passAimAngleDeg = isBlueAlliance() ? 180.0 : 0.0;
   }
 
   public GameZone getZoneFromPRC () {
@@ -253,18 +296,17 @@ public class StateMachine extends SubsystemBase {
     }
   }
 
-  // Runs shooter, hood, feeder, and spindexer toward the given target (hopper or corner).
+  // Run shooter, hood, feeder, and spindexer for the current target.
   private void runShootingToTarget(Translation2d target) {
     Pose2d pose = drivetrain.getState().Pose;
     double distance = pose.getTranslation().minus(target).getNorm();
     SmartDashboard.putNumber("distanceToHopper", distance);
 
-    // --- SOTM solver ---
-    // Field-relative velocity: rotate robot-relative speeds by heading
+    // SOTM solver: convert robot-relative speeds into field frame.
     ChassisSpeeds robotVel = drivetrain.getState().Speeds;
     ChassisSpeeds fieldVel = ChassisSpeeds.fromRobotRelativeSpeeds(robotVel, pose.getRotation());
 
-    // hubForward = (0,0) disables behind-hub check (2026 hopper has no "back side")
+    // (0,0) disables behind-hub rejection for the 2026 hopper target.
     Translation2d hubForward = new Translation2d(0, 0);
 
     LimelightHelpers.PoseEstimate latestMT2 = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2(bestLimelight);
@@ -273,12 +315,12 @@ public class StateMachine extends SubsystemBase {
         pose, fieldVel, robotVel, target, hubForward, visionConf);
     lastSOTMResult = shotCalc.calculate(inputs);
 
-    // Determine shooter velocity and hood angle
+    // Choose shooter speed and hood angle from SOTM or fallback LUT.
     double shooterVelo;
     double hoodPos;
     if (lastSOTMResult.isValid()) {
-      shooterVelo = lastSOTMResult.rpm(); // rps (LUT is in rps)
-      // ShotCalculator stores hood angle in degrees; convert back to rotations for motor
+      shooterVelo = lastSOTMResult.shooterRps();
+      // ShotCalculator returns degrees; convert to rotations for the motor controller.
       double hoodDeg = shotCalc.getHoodAngle(lastSOTMResult.solvedDistanceM());
       hoodPos = hoodDeg / 360.0;
     } else {
@@ -286,7 +328,7 @@ public class StateMachine extends SubsystemBase {
       hoodPos = ShotConstants.HOOD_ANGLE_INTERPOLATOR.getInterpolatedValue(distance);
     }
 
-    // Update static aim angle (used by SwerveDriveCommand as fallback).
+    // Update fallback heading used when SOTM is invalid.
     staticAimAngleDeg = Math.toDegrees(Math.atan2(
         target.getY() - pose.getY(), target.getX() - pose.getX())) + 180.0;
 
@@ -350,6 +392,11 @@ public class StateMachine extends SubsystemBase {
     return staticAimAngleDeg;
   }
 
+  // Pass aim angle (degrees, field frame) toward our alliance side.
+  public double getPassAimAngleDeg() {
+    return passAimAngleDeg;
+  }
+
   public void setWantedState(RobotState state) {
     wantedState = state;
   }
@@ -368,9 +415,7 @@ public class StateMachine extends SubsystemBase {
 
   /** Convenience: is the robot on the blue alliance? */
   public boolean isBlueAlliance() {
-    if (DriverStation.getAlliance().isEmpty())
-      return true;
-    return DriverStation.getAlliance().get() == Alliance.Blue;
+    return DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Blue;
   }
 
   /** Distance (m) inward from each side when targeting a corner (field: blue right = 0,0, red left = max, max). */

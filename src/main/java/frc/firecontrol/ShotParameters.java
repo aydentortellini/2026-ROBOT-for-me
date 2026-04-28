@@ -1,5 +1,5 @@
 /*
- * ShotParameters.java - Shot parameters (RPM, angle, TOF) for one LUT entry
+ * ShotParameters.java - Shot parameters (RPS, angle, TOF) for one LUT entry
  *
  * MIT License
  *
@@ -24,13 +24,13 @@ import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.interpolation.Interpolator;
 
 /**
- * Ballistic parameters at a single distance: RPM, hood angle, and time-of-flight.
+ * Ballistic parameters at a single distance: RPS, hood angle, and time-of-flight.
  * All three interpolate linearly so the LUT gives smooth values between data points.
  *
  * <p>For fixed-angle shooters, every entry shares the same angleDeg. Once you've got
  * an adjustable hood, the angle varies per-distance and interpolation covers the gaps.
  */
-public record ShotParameters(double rpm, double angleDeg, double tofSec) {
+public record ShotParameters(double rps, double angleDeg, double tofSec) {
 
   /** All zeros. Safe as a default when the LUT is empty. */
   public static final ShotParameters ZERO = new ShotParameters(0, 0, 0);
@@ -42,7 +42,7 @@ public record ShotParameters(double rpm, double angleDeg, double tofSec) {
   public static Interpolator<ShotParameters> interpolator() {
     return (start, end, t) ->
         new ShotParameters(
-            MathUtil.interpolate(start.rpm, end.rpm, t),
+            MathUtil.interpolate(start.rps, end.rps, t),
             MathUtil.interpolate(start.angleDeg, end.angleDeg, t),
             MathUtil.interpolate(start.tofSec, end.tofSec, t));
   }

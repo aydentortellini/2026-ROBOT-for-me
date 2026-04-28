@@ -8,6 +8,7 @@ import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj2.command.Command;
 import frc.lib.team9410.PowerRobotContainer;
 import edu.wpi.first.wpilibj2.command.InstantCommand;
@@ -20,14 +21,14 @@ import frc.robot.subsystems.StateMachine.RobotState;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import frc.robot.commands.VelocitySysId;
 import frc.robot.constants.AutoConstants;
-import frc.robot.commands.StrafeCommand;
 import frc.robot.commands.SwerveDriveCommand;
+import frc.robot.utils.FieldUtils.GameZone;
 
 public class RobotContainer implements PowerRobotContainer {
 
   // --- Other ---
   private final StateMachine stateMachine = new StateMachine();
-  private AutoPath auto;
+  private AutoPath auto = AutoPath.BLUE_LEFT;
   /**
    * Game timer: counts up from 0 to 2 minutes 40 seconds (160 s). Start via
    * {@link #startGameTimer()}.
@@ -81,36 +82,25 @@ public class RobotContainer implements PowerRobotContainer {
   private void configureBindings() {
     // Intake in and out
     driverController.leftTrigger(0.5).and(() -> !driverController.rightTrigger(0.5).getAsBoolean())
-        .onTrue(new InstantCommand(
-            () -> {
-              stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_MAX);
-              stateMachine.intakeRoller.setVelocity(145);
-            }))
-        .onFalse(new InstantCommand(
-            () -> {
-              stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_IDLE);
-              stateMachine.intakeRoller.brake();
-            }));
+        .onTrue(new InstantCommand(() -> stateMachine.setWantedState(RobotState.INTAKING)))
+        .onFalse(new InstantCommand(() -> stateMachine.setWantedState(RobotState.READY)));
   
   //Shooting
     driverController.rightTrigger(0.5)
       .onTrue(new InstantCommand(()->{
-        stateMachine.setWantedState(RobotState.SHOOTING);
+        GameZone zone = stateMachine.getZoneFromPRC();
+        if (zone == GameZone.NEUTRAL || zone == GameZone.INTERCHANGE) {
+          stateMachine.setWantedState(RobotState.PASSING);
+        } else {
+          stateMachine.setWantedState(RobotState.SHOOTING);
+        }
       }))
       .onFalse(new InstantCommand(() -> stateMachine.setWantedState(RobotState.READY)));
 
     //Outake
     driverController.y()
-        .onTrue(new InstantCommand(
-            () -> {
-              stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_FEED);
-              stateMachine.intakeRoller.setVelocity(-145);
-            }))
-        .onFalse(new InstantCommand(
-            () -> {
-              stateMachine.intakeWrist.setPositionRotations(Constants.Intake.INTAKE_IDLE);
-              stateMachine.intakeRoller.brake();
-            }));
+        .onTrue(new InstantCommand(() -> stateMachine.setWantedState(RobotState.OUTTAKING)))
+        .onFalse(new InstantCommand(() -> stateMachine.setWantedState(RobotState.READY)));
 
     //Reset Gyro
       driverController.back().onTrue(new InstantCommand(
@@ -163,6 +153,9 @@ public class RobotContainer implements PowerRobotContainer {
   }
 
   public Command getAutonomousCommand() {
+    if (auto == null) {
+      auto = AutoPath.BLUE_LEFT;
+    }
 
     switch (auto) {
       case RED_LEFT:
@@ -189,6 +182,9 @@ public class RobotContainer implements PowerRobotContainer {
   // Builds the standard quadrant auto sequence with the given 7 poses. 
   private Command buildQuadrantAuto(
       Pose2d p1, Pose2d p2, Pose2d p3, Pose2d p4, Pose2d p5, Pose2d p6, Pose2d p7) {
+    DriverStation.Alliance alliance = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue);
+    Translation2d hopperTarget =
+        alliance == DriverStation.Alliance.Blue ? FieldConstants.HOPPER_BLUE : FieldConstants.HOPPER_RED;
     return new SequentialCommandGroup(
         new SwerveDriveCommand(stateMachine.drivetrain, driverController, true, p1, 6.0, 0.5),
         new SwerveDriveCommand(stateMachine.drivetrain, driverController, true, p2, 6.0, 1.0, true),
@@ -208,10 +204,7 @@ public class RobotContainer implements PowerRobotContainer {
         new SwerveDriveCommand(stateMachine.drivetrain, driverController, true, p6, 3.0, 0.75),
         new SwerveDriveCommand(stateMachine.drivetrain, driverController, true, p7, 3.0, 1.0, true),
         new InstantCommand(() -> stateMachine.setWantedState(RobotState.SHOOTING)),
-        new TurnToPointCommand(stateMachine.drivetrain,
-            DriverStation.getAlliance().get() == DriverStation.Alliance.Blue ? FieldConstants.HOPPER_BLUE
-                : FieldConstants.HOPPER_RED,
-            3),
+        new TurnToPointCommand(stateMachine.drivetrain, hopperTarget, 3),
         new WaitCommand(2.0));
   }
 

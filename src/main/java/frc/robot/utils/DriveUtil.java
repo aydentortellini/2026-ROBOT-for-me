@@ -23,6 +23,7 @@ public class DriveUtil {
   public static final double SLOW_DRIVE_TO_POINT_SPEED =
       TunerConstants.kSpeedAt12Volts.in(MetersPerSecond) * 0.75 / 4;
   public static final double STATIC_FRICTION_CONSTANT = 0.085;
+  private static Alliance lastKnownAlliance = Alliance.Blue;
 
   public static boolean isClose(Pose2d currentPose, Pose2d targetPose) {
     final Translation2d translationToPoint =
@@ -77,14 +78,9 @@ public class DriveUtil {
       double skewCompensation) {
     boolean isBlueAlliance = true;
     final Pose2d currentPose = drivetrain.getState().Pose;
-
-    if (DriverStation.getAlliance().isEmpty()) {
-      return new ChassisSpeeds(0, 0, 0);
-    }
-
-    if (DriverStation.getAlliance().get() == Alliance.Blue) {
-      isBlueAlliance = true;
-    }
+    Alliance alliance = DriverStation.getAlliance().orElse(lastKnownAlliance);
+    lastKnownAlliance = alliance;
+    isBlueAlliance = alliance == Alliance.Blue;
 
     double xMagnitude = MathUtil.applyDeadband(controller.getLeftY(), 0.1);
     double yMagnitude = MathUtil.applyDeadband(controller.getLeftX(), 0.1);

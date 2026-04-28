@@ -6,8 +6,8 @@ import edu.wpi.first.math.geometry.Translation2d;
 public class FieldConstants {
   public static final double X_MIN = 0.0;
   public static final double Y_MIN = 0.0;
-  public static final double X_MAX = 17.5;
-  public static final double Y_MAX = 8.0;
+  public static final double X_MAX = 16.541;
+  public static final double Y_MAX = 8.052;
   public static final double TOL = 2.0;
 
   public static final double BLUE_START_X = 0.0;

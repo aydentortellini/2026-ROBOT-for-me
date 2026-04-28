@@ -45,12 +45,9 @@ public class TurnToPointCommand extends Command {
   }
 
   public boolean isBlueAlliance() {
-    if (DriverStation.getAlliance().isEmpty())
-      return true;
-    return DriverStation.getAlliance().get() == Alliance.Blue;
+    return DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Blue;
   }
 
-  // Called when the command is initially scheduled.
   @Override
   public void initialize() {
     Translation2d robotPosition = drivetrain.getState().Pose.getTranslation();
@@ -62,7 +59,6 @@ public class TurnToPointCommand extends Command {
     targetRotationToPoint = Rotation2d.fromRadians(targetAngleFieldRelative + offset);
   }
 
-  // Called every time the scheduler runs while the command is scheduled.
   @Override
   public void execute() {
     drivetrain.drive(
@@ -72,12 +68,10 @@ public class TurnToPointCommand extends Command {
         Swerve.DriveMode.ROTATION_LOCK);
   }
 
-  // Called once the command ends or is interrupted.
   @Override
   public void end(boolean interrupted) {
   }
 
-  // Returns true when the command should end.
   @Override
   public boolean isFinished() {
     return Math
