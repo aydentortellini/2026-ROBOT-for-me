@@ -21,6 +21,8 @@ import frc.robot.subsystems.StateMachine.RobotState;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import frc.robot.commands.VelocitySysId;
 import frc.robot.constants.AutoConstants;
+import frc.robot.commands.StrafeCommand;
+import frc.robot.commands.StrafeCommand.StrafeSide;
 import frc.robot.commands.SwerveDriveCommand;
 import frc.robot.utils.FieldUtils.GameZone;
 
@@ -98,7 +100,7 @@ public class RobotContainer implements PowerRobotContainer {
       .onFalse(new InstantCommand(() -> stateMachine.setWantedState(RobotState.READY)));
 
     //Outake
-    driverController.y()
+    driverController.leftBumper()
         .onTrue(new InstantCommand(() -> stateMachine.setWantedState(RobotState.OUTTAKING)))
         .onFalse(new InstantCommand(() -> stateMachine.setWantedState(RobotState.READY)));
 
@@ -107,6 +109,12 @@ public class RobotContainer implements PowerRobotContainer {
         () -> {
           stateMachine.resetGyro();
         }));
+
+    // Strafe (hold button to hug nearest wall)
+    driverController.y().whileTrue(new StrafeCommand(stateMachine.drivetrain, driverController, StrafeSide.FRONT));
+    driverController.a().whileTrue(new StrafeCommand(stateMachine.drivetrain, driverController, StrafeSide.BACK));
+    driverController.x().whileTrue(new StrafeCommand(stateMachine.drivetrain, driverController, StrafeSide.LEFT));
+    driverController.b().whileTrue(new StrafeCommand(stateMachine.drivetrain, driverController, StrafeSide.RIGHT));
 
     //DriveTrain
       stateMachine.drivetrain.setDefaultCommand(new SwerveDriveCommand(stateMachine.drivetrain, driverController, false, stateMachine));

@@ -258,16 +258,20 @@ public class StateMachine extends SubsystemBase {
   }
 
   private void executePassing() {
-    // Start conservative: hold mechanisms and only command heading behavior.
-    shooter.brake();
-    spindexer.brake();
-    feeder.brake();
+    intakeTimer++;
     intakeRoller.brake();
-    if (intakeWrist.getSetpointRotations() > Constants.Intake.INTAKE_IDLE) {
-      intakeWrist.setPositionRotations(Constants.Intake.INTAKE_IDLE);
+    // Blue hopper is to the LEFT (low X): robot faces RIGHT (0°) so rear aims left.
+    // Red hopper is to the RIGHT (high X): robot faces LEFT (180°) so rear aims right.
+    passAimAngleDeg = isBlueAlliance() ? 0.0 : 180.0;
+    Translation2d target = isBlueAlliance() ? Constants.Field.HOPPER_BLUE : Constants.Field.HOPPER_RED;
+    runShootingToTarget(target);
+    if (intakeWrist.getSetpointRotations() >= Constants.Intake.INTAKE_IDLE) {
+      if (intakeTimer % 50 == 0) {
+        intakeWrist.setPositionRotations(Constants.Intake.INTAKE_FEED);
+      } else if (intakeTimer % 25 == 0) {
+        intakeWrist.setPositionRotations(Constants.Intake.INTAKE_IDLE);
+      }
     }
-    intakeTimer = 0;
-    passAimAngleDeg = isBlueAlliance() ? 180.0 : 0.0;
   }
 
   public GameZone getZoneFromPRC () {

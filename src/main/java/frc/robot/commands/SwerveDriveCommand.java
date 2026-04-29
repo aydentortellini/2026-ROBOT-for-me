@@ -23,8 +23,6 @@ import frc.robot.utils.FieldUtils;
 import frc.robot.utils.FieldUtils.GameZone;
 
 
-import frc.robot.Constants;
-import frc.robot.constants.LocationConstants;
 import frc.robot.constants.OIConstants;
 import frc.robot.constants.TunerConstants;
 import frc.robot.subsystems.StateMachine;
@@ -207,6 +205,8 @@ public class SwerveDriveCommand extends Command {
       double xSpeed = speeds.vxMetersPerSecond * OIConstants.MAX_SPEED_COEFFICIENT * inversionMultiplier;
       double ySpeed = speeds.vyMetersPerSecond * OIConstants.MAX_SPEED_COEFFICIENT * inversionMultiplier;
       double aimDeg = stateMachine.getPassAimAngleDeg();
+      // CTRE operator perspective adds 180° for Red in ROTATION_LOCK; subtract to avoid double-inversion.
+      if (!stateMachine.isBlueAlliance()) aimDeg -= 180.0;
       SmartDashboard.putNumber("aimDeg", aimDeg);
       SmartDashboard.putBoolean("usingSOTM", false);
       SmartDashboard.putNumber("robotHeadingDeg", drivetrain.getState().Pose.getRotation().getDegrees());
@@ -225,6 +225,8 @@ public class SwerveDriveCommand extends Command {
       double aimDeg = usingSOTM
           ? sotmResult.driveAngle().getDegrees()
           : stateMachine.getStaticAimAngleDeg();
+      // CTRE operator perspective adds 180° for Red in ROTATION_LOCK; subtract to avoid double-inversion.
+      if (!stateMachine.isBlueAlliance()) aimDeg -= 180.0;
       SmartDashboard.putNumber("aimDeg", aimDeg);
       SmartDashboard.putBoolean("usingSOTM", usingSOTM);
       SmartDashboard.putNumber("robotHeadingDeg", drivetrain.getState().Pose.getRotation().getDegrees());
@@ -325,218 +327,6 @@ public class SwerveDriveCommand extends Command {
     final double currentVelocity = Math.hypot(speeds.vxMetersPerSecond, speeds.vyMetersPerSecond);
     final double tolerance = poseTolerance > 0 ? poseTolerance : 1;
     return linearDistance < Units.inchesToMeters(tolerance) && (Math.abs(linearRotation) < 10 || disableRotationLock);
-  }
-
-  private double getRotation(double speed, StrafeSide side, GameZone zone, Pose2d pose) {
-    Alliance alliance = DriverStation.getAlliance().orElse(Alliance.Blue);
-    double centerLine = getCenterLine(zone);
-
-    switch (side) {
-      case FRONT:
-        if (Math.abs(speed) < 0.1) {
-          if ((alliance == Alliance.Blue && pose.getY() > centerLine)
-              || (alliance == Alliance.Red && pose.getY() < centerLine)) {
-            return -45.0;
-          } else {
-            return 45.0;
-          }
-        } else if (speed > 0) {
-          return 45.0;
-        } else {
-          return -45.0;
-        }
-      case LEFT:
-        if (Math.abs(speed) < 0.1) {
-          if ((alliance == Alliance.Blue && pose.getX() > 2 || (alliance == Alliance.Red && pose.getX() < 2))) {
-            return 135.0;
-          } else {
-            return 45.0;
-          }
-        } else if (speed > 0) {
-          return 45.0;
-        } else {
-          return 135.0;
-        }
-      case RIGHT:
-        if (Math.abs(speed) < 0.1) {
-          if ((alliance == Alliance.Blue && pose.getX() > 2) || (alliance == Alliance.Red && pose.getX() < 2)) {
-            return -135.0;
-          } else {
-            return -45.0;
-          }
-        } else if (speed > 0.0) {
-          return -45.0;
-        } else {
-          return -135.0;
-        }
-      case BACK:
-        if (Math.abs(speed) < 0.1) {
-          if ((alliance == Alliance.Blue && pose.getY() > centerLine)
-              || (alliance == Alliance.Red && pose.getY() < centerLine)) {
-            return 135.0;
-          } else {
-            return -135.0;
-          }
-        } else if (speed > 0) {
-          return 135.0;
-        } else {
-          return -135.0;
-        }
-      default:
-        return 0.0;
-    }
-  }
-
-  private double getCenterLine(GameZone zone) {
-    switch (zone) {
-      case BLUE_ALLIANCE:
-        return LocationConstants.BLUE_ZONE_X_MID;
-      case RED_ALLIANCE:
-        return LocationConstants.RED_ZONE_X_MID;
-      case NEUTRAL:
-        return LocationConstants.NEUTRAL_X_MID;
-      default:
-        return -1;
-    }
-  }
-
-  private double getXInput(StrafeAxis axis, StrafeSide side) {
-    Pose2d pose = drivetrain.getState().Pose;
-    GameZone zone = FieldUtils.getZone(pose);
-    Alliance alliance = DriverStation.getAlliance().orElse(Alliance.Blue);
-    double strafeLine;
-
-    if ((alliance == Alliance.Blue && side == StrafeSide.LEFT)
-        ||
-        (alliance == Alliance.Red && side == StrafeSide.RIGHT)) {
-      strafeLine = LocationConstants.FAR_WALL_Y;
-    } else {
-      strafeLine = LocationConstants.NEAR_WALL_Y;
-    }
-
-    final Pose2d targetPose = new Pose2d(pose.getX(), strafeLine, pose.getRotation());
-    final double directionMultiplier = alliance == Alliance.Blue ? -1.0 : 1.0;
-
-    Translation2d velocity = DriveUtil.calculateDriveToPointVelocity(
-        pose, targetPose, directionMultiplier, driveToPointController, poseTolerance);
-
-    return velocity.getX();
-  }
-
-  private double getYInput(StrafeAxis axis, StrafeSide side) {
-    Pose2d pose = drivetrain.getState().Pose;
-    GameZone zone = FieldUtils.getZone(pose);
-    Alliance alliance = DriverStation.getAlliance().orElse(Alliance.Blue);
-    double strafeLine;
-
-    switch (zone) {
-      case BLUE_ALLIANCE:
-        if ((alliance == Alliance.Blue && side == StrafeSide.FRONT)
-            ||
-            (alliance == Alliance.Red && side == StrafeSide.BACK)) {
-          strafeLine = LocationConstants.BLUE_HUB_WALL_X;
-        } else {
-          strafeLine = LocationConstants.BLUE_ALLIANCE_WALL_X;
-        }
-
-        break;
-      case RED_ALLIANCE:
-        if ((alliance == Alliance.Blue && side == StrafeSide.FRONT)
-            ||
-            (alliance == Alliance.Red && side == StrafeSide.BACK)) {
-          strafeLine = LocationConstants.RED_ALLIANCE_WALL_X;
-        } else {
-          strafeLine = LocationConstants.RED_HUB_WALL_X;
-        }
-
-      case NEUTRAL:
-        if ((alliance == Alliance.Blue && side == StrafeSide.FRONT)
-            ||
-            (alliance == Alliance.Red && side == StrafeSide.BACK)) {
-          strafeLine = LocationConstants.RED_CENTER_WALL_X;
-        } else {
-          strafeLine = LocationConstants.BLUE_CENTER_WALL_X;
-        }
-
-      default:
-        strafeLine = 0.0;
-        break;
-    }
-
-    final Pose2d targetPose = new Pose2d(pose.getX(), strafeLine, pose.getRotation());
-    final double directionMultiplier = alliance == Alliance.Blue ? -1.0 : 1.0;
-
-    Translation2d velocity = DriveUtil.calculateDriveToPointVelocity(
-        pose, targetPose, directionMultiplier, driveToPointController, poseTolerance);
-
-    return velocity.getY();
-  }
-
-  /**
-   * Returns the strafe side (wall) closest to the robot's current pose.
-   * Uses alliance and zone to pick the correct wall X/Y constants.
-   */
-  private static StrafeSide getClosestSide(Swerve drivetrain) {
-    Pose2d pose = drivetrain.getState().Pose;
-    GameZone zone = FieldUtils.getZone(pose);
-    Alliance alliance = DriverStation.getAlliance().orElse(Alliance.Blue);
-
-    double frontWallX;
-    double backWallX;
-    switch (zone) {
-      case BLUE_ALLIANCE:
-        frontWallX = LocationConstants.BLUE_HUB_WALL_X;
-        backWallX = LocationConstants.BLUE_ALLIANCE_WALL_X;
-        break;
-      case RED_ALLIANCE:
-        frontWallX = LocationConstants.RED_HUB_WALL_X;
-        backWallX = LocationConstants.RED_ALLIANCE_WALL_X;
-        break;
-      case NEUTRAL:
-        frontWallX = alliance == Alliance.Blue ? LocationConstants.RED_CENTER_WALL_X
-            : LocationConstants.BLUE_CENTER_WALL_X;
-        backWallX = alliance == Alliance.Blue ? LocationConstants.BLUE_CENTER_WALL_X
-            : LocationConstants.RED_CENTER_WALL_X;
-        break;
-      default:
-        return StrafeSide.FRONT;
-    }
-
-    // Far/near wall Y are fixed field positions; LEFT/RIGHT map by alliance (see
-    // getXInput).
-    double distFront = Math.abs(pose.getX() - frontWallX);
-    double distBack = Math.abs(pose.getX() - backWallX);
-    double distToFarWall = Math.abs(pose.getY() - LocationConstants.FAR_WALL_Y);
-    double distToNearWall = Math.abs(pose.getY() - LocationConstants.NEAR_WALL_Y);
-
-    double min = Math.min(Math.min(distFront, distBack), Math.min(distToFarWall, distToNearWall));
-    if (min == distFront)
-      return StrafeSide.FRONT;
-    if (min == distBack)
-      return StrafeSide.BACK;
-    if (min == distToFarWall)
-      return alliance == Alliance.Blue ? StrafeSide.LEFT : StrafeSide.RIGHT;
-    return alliance == Alliance.Blue ? StrafeSide.RIGHT : StrafeSide.LEFT;
-  }
-
-  private StrafeAxis getStrafeAxis(StrafeSide side) {
-    if (side == StrafeSide.LEFT || side == StrafeSide.RIGHT) {
-      return StrafeAxis.X;
-    } else {
-      return StrafeAxis.Y;
-    }
-  }
-
-  private static enum StrafeAxis {
-    X,
-    Y
-  }
-
-  public static enum StrafeSide {
-    LEFT,
-    RIGHT,
-    FRONT,
-    BACK
   }
 
   /**

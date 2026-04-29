@@ -76,11 +76,9 @@ public class DriveUtil {
       Swerve drivetrain,
       double maxAngularRate,
       double skewCompensation) {
-    boolean isBlueAlliance = true;
     final Pose2d currentPose = drivetrain.getState().Pose;
     Alliance alliance = DriverStation.getAlliance().orElse(lastKnownAlliance);
     lastKnownAlliance = alliance;
-    isBlueAlliance = alliance == Alliance.Blue;
 
     double xMagnitude = MathUtil.applyDeadband(controller.getLeftY(), 0.1);
     double yMagnitude = MathUtil.applyDeadband(controller.getLeftX(), 0.1);
@@ -90,8 +88,8 @@ public class DriveUtil {
     yMagnitude = Math.copySign(yMagnitude * yMagnitude * yMagnitude, yMagnitude);
     angularMagnitude = Math.copySign(angularMagnitude * angularMagnitude, angularMagnitude);
 
-    double xVelocity = (isBlueAlliance ? -xMagnitude * MAX_SPEED : xMagnitude * MAX_SPEED) * 0.95;
-    double yVelocity = (isBlueAlliance ? -yMagnitude * MAX_SPEED : yMagnitude * MAX_SPEED) * 0.95;
+    double xVelocity = -xMagnitude * MAX_SPEED * 0.95;
+    double yVelocity = -yMagnitude * MAX_SPEED * 0.95;
     double angularVelocity = angularMagnitude * maxAngularRate * 0.95;
 
     Rotation2d skewCompensationFactor =

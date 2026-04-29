@@ -6,7 +6,7 @@ package frc.robot.commands;
 
 import static edu.wpi.first.units.Units.*;
 
-import org.ejml.dense.row.SpecializedOps_DDRM;
+// import org.ejml.dense.row.SpecializedOps_DDRM;s
 
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.geometry.Pose2d;
@@ -32,7 +32,7 @@ public class StrafeCommand extends Command {
 
   private final Swerve drivetrain;
   private final CommandXboxController controller;
-  /** Set in constructor or in initialize() when using the no-side constructor. */
+  // Set in constructor or in initialize() when using the no-side constructor.
   private StrafeSide side = null;
   private final PIDController driveToPointController;
   private final double poseTolerance;
@@ -45,15 +45,15 @@ public class StrafeCommand extends Command {
     this.drivetrain = drivetrain;
     this.controller = controller;
     this.side = side;
-    this.driveToPointController = new PIDController(3.2, 0, 0.2);
-    this.poseTolerance = -1;
+    this.driveToPointController = new PIDController(6.0, 0, 0);
+    this.poseTolerance = 6;
     addRequirements(drivetrain);
   }
 
-  /**
-   * Constructs with no side; the closest side to the robot is chosen when the
-   * command starts.
-   */
+  
+  //Constructs with no side; the closest side to the robot is chosen when the
+  //command starts.
+   
   public StrafeCommand(Swerve drivetrain, CommandXboxController controller) {
     this(drivetrain, controller, null);
   }
@@ -261,10 +261,10 @@ public class StrafeCommand extends Command {
     return velocity.getX();
   }
 
-  /**
-   * Returns the strafe side (wall) closest to the robot's current pose.
-   * Uses alliance and zone to pick the correct wall X/Y constants.
-   */
+  
+  //Returns the strafe side (wall) closest to the robot's current pose.
+   //Uses alliance and zone to pick the correct wall X/Y constants.
+  
   private static StrafeSide getClosestSide(Swerve drivetrain) {
     Pose2d pose = drivetrain.getState().Pose;
     GameZone zone = FieldUtils.getZone(pose);
