@@ -122,21 +122,39 @@ public class Robot extends TimedRobot {
     ballSim.tick();
 
     var sm = m_robotContainer.getStateMachine();
-    if (sm.getCurrentState() != RobotState.SHOOTING) {
+    boolean isShooting = sm.getCurrentState() == RobotState.SHOOTING;
+    boolean isPassing  = sm.getCurrentState() == RobotState.PASSING;
+    if (!isShooting && !isPassing) {
       simBallCooldown = 0;
       return;
     }
 
-    var result = sm.getLastSOTMResult();
-    if (!result.isValid() || simBallCooldown > 0) {
-      if (simBallCooldown > 0) simBallCooldown--;
+    if (simBallCooldown > 0) {
+      simBallCooldown--;
       return;
     }
 
-    // Compute launch vector from the SOTM result
+    var result = sm.getLastSOTMResult();
+
     var pose = sm.drivetrain.getState().Pose;
-    // Rear of robot = pose.getRotation() + PI (physically where the shooter points)
-    double heading = pose.getRotation().getRadians() + Math.PI;
+    double heading;
+    double rps;
+    double tof;
+
+    if (isPassing) {
+      // Passing uses a fixed aim angle; SOTM result may not be valid.
+      heading = Math.toRadians(sm.getPassAimAngleDeg()) + Math.PI;
+      double dist = pose.getTranslation().minus(
+          sm.isBlueAlliance() ? Constants.Field.HOPPER_BLUE : Constants.Field.HOPPER_RED).getNorm();
+      rps = frc.robot.constants.ShotConstants.SHOOTER_VELOCITY_INTERPOLATOR.getInterpolatedValue(dist);
+      tof = 0.75;
+    } else {
+      if (!result.isValid()) return;
+      rps = result.shooterRps();
+      tof = result.timeOfFlightSec() > 0 ? result.timeOfFlightSec() : 0.75;
+      // Rear of robot = pose.getRotation() + PI (physically where the shooter points)
+      heading = pose.getRotation().getRadians() + Math.PI;
+    }
 
     // Ball speed is derived from shooter RPS so that changing the LUT values
     // actually affects the trajectory. Vertical comes from TOF (arc shape),
@@ -147,8 +165,6 @@ public class Robot extends TimedRobot {
     // RPS_TO_SPEED ≈ 0.175 m/s per RPS — calibrated so default LUT (28.5 RPS at 2.5 m)
     // produces the correct horizontal distance. Tune alongside the real robot LUT.
     final double RPS_TO_SPEED = 0.175;
-    double rps      = result.shooterRps();
-    double tof      = result.timeOfFlightSec() > 0 ? result.timeOfFlightSec() : 0.75;
     double totalSpeed = rps * RPS_TO_SPEED;
     double vertSpeed  = (9.81 * tof) / 2.0;
     double horzSpeed  = Math.sqrt(Math.max(0, totalSpeed * totalSpeed - vertSpeed * vertSpeed));
@@ -162,7 +178,7 @@ public class Robot extends TimedRobot {
         horzSpeed * Math.sin(heading),
         vertSpeed);
 
-    ballSim.launchBall(launchPos, launchVel, result.shooterRps() * 60.0); // convert rps->RPM for spin
+    ballSim.launchBall(launchPos, launchVel, rps * 60.0); // convert rps->RPM for spin
     simBallCooldown = 25; // ~0.5 s between spawned balls
   }
 

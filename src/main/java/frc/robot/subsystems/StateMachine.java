@@ -19,6 +19,7 @@ import edu.wpi.first.networktables.StructArrayPublisher;
 import edu.wpi.first.networktables.StructPublisher;
 
 import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
@@ -264,7 +265,7 @@ public class StateMachine extends SubsystemBase {
     // Red hopper is to the RIGHT (high X): robot faces LEFT (180°) so rear aims right.
     passAimAngleDeg = isBlueAlliance() ? 0.0 : 180.0;
     Translation2d target = isBlueAlliance() ? Constants.Field.HOPPER_BLUE : Constants.Field.HOPPER_RED;
-    runShootingToTarget(target);
+    runShootingToTarget(target, passAimAngleDeg);
     if (intakeWrist.getSetpointRotations() >= Constants.Intake.INTAKE_IDLE) {
       if (intakeTimer % 50 == 0) {
         intakeWrist.setPositionRotations(Constants.Intake.INTAKE_FEED);
@@ -300,8 +301,13 @@ public class StateMachine extends SubsystemBase {
     }
   }
 
-  // Run shooter, hood, feeder, and spindexer for the current target.
   private void runShootingToTarget(Translation2d target) {
+    runShootingToTarget(target, Double.NaN);
+  }
+
+  // Run shooter, hood, feeder, and spindexer for the current target.
+  // fixedHeadingDeg: if not NaN, overrides SOTM/static for the heading gate (used in PASSING).
+  private void runShootingToTarget(Translation2d target, double fixedHeadingDeg) {
     Pose2d pose = drivetrain.getState().Pose;
     double distance = pose.getTranslation().minus(target).getNorm();
     SmartDashboard.putNumber("distanceToHopper", distance);
@@ -359,18 +365,28 @@ public class StateMachine extends SubsystemBase {
         MathUtil.clamp(hoodPos, ShooterConstants.SHOOTER_HOOD_MIN, ShooterConstants.SHOOTER_HOOD_MAX));
 
     // Heading gate: only feed/spin when robot is aimed within tolerance
-    double targetHeadingRad = lastSOTMResult.isValid()
-        ? lastSOTMResult.driveAngle().getRadians()
-        : Math.toRadians(staticAimAngleDeg);
+    double targetHeadingRad;
+    boolean usingFixedHeading = !Double.isNaN(fixedHeadingDeg);
+    if (usingFixedHeading) {
+      targetHeadingRad = Math.toRadians(fixedHeadingDeg);
+    } else if (lastSOTMResult.isValid()) {
+      targetHeadingRad = lastSOTMResult.driveAngle().getRadians();
+    } else {
+      targetHeadingRad = Math.toRadians(staticAimAngleDeg);
+    }
     double headingErrorDeg = Math.abs(Math.toDegrees(
         MathUtil.angleModulus(pose.getRotation().getRadians() - targetHeadingRad)));
-    boolean headingOK = headingErrorDeg < (lastSOTMResult.isValid() ? 15.0 : 5.0);
+    boolean headingOK = headingErrorDeg < ((!usingFixedHeading && lastSOTMResult.isValid()) ? 15.0 : 5.0);
     SmartDashboard.putNumber("headingErrorDeg", headingErrorDeg);
     SmartDashboard.putBoolean("headingOK", headingOK);
 
     // double velocityThreshold = TurretConstants.SHOOTER_VELOCITY_INTERPOLATOR.getInterpolatedValue(distance) - 1.5; // old — fought FireControl
     double velocityThreshold = shooterVelo - 1.5;
-    boolean shooterAtSpeed = shooter.getVelocityMotor().getRotorVelocity().getValueAsDouble() > velocityThreshold;
+    boolean shooterAtSpeed = RobotBase.isSimulation()
+        || shooter.getVelocityMotor().getRotorVelocity().getValueAsDouble() > velocityThreshold;
+
+    SmartDashboard.putBoolean("shooterAtSpeed", shooterAtSpeed);
+    SmartDashboard.putBoolean("readyToFire", headingOK && shooterAtSpeed);
 
     if (headingOK && shooterAtSpeed) {
       feeder.setVelocity(slowFeeder ? -60 : -2 * shooterVelo);
