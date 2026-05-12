@@ -16,27 +16,33 @@ import com.pathplanner.lib.controllers.PPHolonomicDriveController;
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
+import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
-import edu.wpi.first.wpilibj.Notifier;
-import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Subsystem;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import frc.robot.constants.TunerConstants;
 import frc.robot.constants.TunerConstants.TunerSwerveDrivetrain;
+import frc.robot.sim.PhoenixSimUtil;
+import org.ironmaple.simulation.SimulatedArena;
+import org.ironmaple.simulation.drivesims.COTS;
+import org.ironmaple.simulation.drivesims.SwerveDriveSimulation;
+import org.ironmaple.simulation.drivesims.SwerveModuleSimulation;
+import org.ironmaple.simulation.drivesims.configs.DriveTrainSimulationConfig;
+import org.ironmaple.simulation.drivesims.configs.SwerveModuleSimulationConfig;
 
 /**
  * Class that extends the Phoenix 6 SwerveDrivetrain class and implements Subsystem so it can easily
  * be used in command-based projects.
  */
 public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
-  private static final double kSimLoopPeriod = 0.005; // 5 ms
-  private Notifier m_simNotifier = null;
-  private double m_lastSimTime;
+  /** MapleSim drivetrain simulation. Non-null only when {@link Utils#isSimulation()}. */
+  private SwerveDriveSimulation m_simDrivetrain = null;
 
   /* Blue alliance sees forward as 0 degrees (toward red alliance wall) */
   private static final Rotation2d kBlueAlliancePerspectiveRotation = Rotation2d.kZero;
@@ -152,7 +158,7 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
       SwerveDrivetrainConstants drivetrainConstants, SwerveModuleConstants<?, ?, ?>... modules) {
     super(drivetrainConstants, modules);
     if (Utils.isSimulation()) {
-      startSimThread();
+      initMapleSim();
     }
     DRIVE_AT_ANGLE.HeadingController = HEADING_CONTROLLER;
     DRIVE_AT_ANGLE.HeadingController.enableContinuousInput(-Math.PI, Math.PI);
@@ -176,7 +182,7 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
       SwerveModuleConstants<?, ?, ?>... modules) {
     super(drivetrainConstants, odometryUpdateFrequency, modules);
     if (Utils.isSimulation()) {
-      startSimThread();
+      initMapleSim();
     }
     DRIVE_AT_ANGLE.HeadingController = HEADING_CONTROLLER;
     DRIVE_AT_ANGLE.HeadingController.enableContinuousInput(-Math.PI, Math.PI);
@@ -211,7 +217,7 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
         visionStandardDeviation,
         modules);
     if (Utils.isSimulation()) {
-      startSimThread();
+      initMapleSim();
     }
     DRIVE_AT_ANGLE.HeadingController = HEADING_CONTROLLER;
     DRIVE_AT_ANGLE.HeadingController.enableContinuousInput(-Math.PI, Math.PI);
@@ -300,21 +306,82 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
     }
   }
 
-  private void startSimThread() {
-    m_lastSimTime = Utils.getCurrentTimeSeconds();
+  /**
+   * Builds the MapleSim drivetrain and bridges its module/gyro state to Phoenix 6 sim states.
+   *
+   * <p>Replaces the CTRE Phoenix sim notifier loop. MapleSim's own arena tick is now the
+   * authoritative source of motor + chassis physics. Each sub-tick, MapleSim pushes encoder
+   * positions/velocities into the TalonFX/CANcoder sim states via {@link PhoenixSimUtil},
+   * and reads back the voltage CTRE wants applied. The Pigeon2 yaw is pushed once per robot
+   * loop from {@link #updateSimState()}.
+   */
+  private void initMapleSim() {
+    // Gear ratios, wheel radius, and friction voltages mirror TunerConstants.
+    SwerveModuleSimulationConfig moduleConfig =
+        new SwerveModuleSimulationConfig(
+            DCMotor.getKrakenX60(1),
+            DCMotor.getKrakenX60(1),
+            5.4,
+            12.1,
+            Volts.of(0.2),
+            Volts.of(0.2),
+            Inches.of(2),
+            KilogramSquareMeters.of(0.03),
+            COTS.WHEELS.COLSONS.cof);
 
-    /* Run simulation at a faster rate so PID gains behave more reasonably */
-    m_simNotifier =
-        new Notifier(
-            () -> {
-              final double currentTime = Utils.getCurrentTimeSeconds();
-              double deltaTime = currentTime - m_lastSimTime;
-              m_lastSimTime = currentTime;
+    // Module translations match TunerConstants module positions (±11.5" × ±10.5").
+    Translation2d[] moduleTranslations =
+        new Translation2d[] {
+          new Translation2d(Inches.of(11.5), Inches.of(10.5)),
+          new Translation2d(Inches.of(11.5), Inches.of(-10.5)),
+          new Translation2d(Inches.of(-11.5), Inches.of(10.5)),
+          new Translation2d(Inches.of(-11.5), Inches.of(-10.5)),
+        };
 
-              /* use the measured time delta, get battery voltage from WPILib */
-              updateSimState(deltaTime, RobotController.getBatteryVoltage());
-            });
-    m_simNotifier.startPeriodic(kSimLoopPeriod);
+    DriveTrainSimulationConfig driveConfig =
+        DriveTrainSimulationConfig.Default()
+            .withRobotMass(Kilograms.of(55))
+            .withBumperSize(Inches.of(30), Inches.of(28))
+            .withCustomModuleTranslations(moduleTranslations)
+            .withSwerveModule(moduleConfig)
+            .withGyro(COTS.ofPigeon2());
+
+    // Spawn near blue alliance station; auto routines will reset via resetPose().
+    m_simDrivetrain = new SwerveDriveSimulation(driveConfig, new Pose2d(2.0, 4.0, Rotation2d.kZero));
+    SimulatedArena.getInstance().addDriveTrainSimulation(m_simDrivetrain);
+
+    SwerveModuleSimulation[] simModules = m_simDrivetrain.getModules();
+    for (int i = 0; i < 4; i++) {
+      var ctreModule = getModule(i);
+      simModules[i].useDriveMotorController(
+          new PhoenixSimUtil.TalonFXMotorControllerSim(ctreModule.getDriveMotor()));
+      simModules[i].useSteerMotorController(
+          new PhoenixSimUtil.TalonFXWithRemoteCANcoderSim(
+              ctreModule.getSteerMotor(), ctreModule.getEncoder()));
+    }
+  }
+
+  /**
+   * Pushes MapleSim's gyro reading into the Pigeon2 sim state. Call once per
+   * {@code Robot.simulationPeriodic()} after {@code SimulatedArena.simulationPeriodic()}.
+   */
+  public void updateSimState() {
+    if (m_simDrivetrain == null) return;
+    Rotation2d gyroReading = m_simDrivetrain.getGyroSimulation().getGyroReading();
+    getPigeon2().getSimState().setRawYaw(gyroReading.getMeasure());
+  }
+
+  /** Returns the MapleSim drivetrain simulation, or {@code null} on the real robot. */
+  public SwerveDriveSimulation getDriveSimulation() {
+    return m_simDrivetrain;
+  }
+
+  @Override
+  public void resetPose(Pose2d pose) {
+    super.resetPose(pose);
+    if (m_simDrivetrain != null) {
+      m_simDrivetrain.setSimulationWorldPose(pose);
+    }
   }
 
   /**
