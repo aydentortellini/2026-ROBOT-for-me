@@ -6,8 +6,8 @@ public class GenerateLUT {
 
   public static void main(String[] args) {
     var params = new ProjectileSimulator.SimParameters(
-        0.215,   // ball mass kg       — confirmed from FuelPhysicsSim (game manual 5.10.1)
-        0.1501,  // ball diameter m    — confirmed from FuelPhysicsSim (game manual 5.10.1)
+        0.215,   // ball mass kg       — game manual 5.10.1
+        0.1501,  // ball diameter m    — game manual 5.10.1
         0.47,    // drag coeff  — smooth sphere, don't change
         0.2,     // Magnus coeff       — don't change
         1.225,   // air density kg/m³  — don't change
