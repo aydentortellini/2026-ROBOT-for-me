@@ -4,17 +4,26 @@
 
 package frc.robot;
 
+import static edu.wpi.first.units.Units.Meters;
+import static edu.wpi.first.units.Units.MetersPerSecond;
+import static edu.wpi.first.units.Units.Radians;
+
 import com.ctre.phoenix6.SignalLogger;
 
 // import edu.wpi.first.wpilibj.DataLogManager;
+import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
+import frc.robot.constants.ShotConstants;
 import frc.robot.sim.IntakeSim;
 import frc.robot.subsystems.StateMachine.RobotState;
 import org.ironmaple.simulation.SimulatedArena;
+import org.ironmaple.simulation.seasonspecific.rebuilt2026.RebuiltFuelOnFly;
 
 
 
@@ -25,6 +34,9 @@ public class Robot extends TimedRobot {
 
   /** Sim-only intake zone. Tracks held fuel and gates shot spawning. */
   private IntakeSim intakeSim = null;
+
+  /** Ticks until the next shot is allowed to spawn (~0.5 s @ 50 Hz). */
+  private int simShotCooldown = 0;
 
   public Robot() {
     SignalLogger.setPath("/U/ctre-logs/");
@@ -120,6 +132,76 @@ public class Robot extends TimedRobot {
 
     // Push MapleSim's gyro reading into the Pigeon2 sim state.
     sm.drivetrain.updateSimState();
+
+    maybeSpawnShot(sm);
+  }
+
+  /**
+   * Spawns a {@link RebuiltFuelOnFly} projectile when the state machine is firing and the
+   * intake holds a fuel ball. Cooldown rate-limits to one shot per ~0.5 s.
+   */
+  private void maybeSpawnShot(frc.robot.subsystems.StateMachine sm) {
+    boolean isShooting = sm.getCurrentState() == RobotState.SHOOTING;
+    boolean isPassing = sm.getCurrentState() == RobotState.PASSING;
+    if (!isShooting && !isPassing) {
+      simShotCooldown = 0;
+      return;
+    }
+    if (simShotCooldown > 0) {
+      simShotCooldown--;
+      return;
+    }
+    if (intakeSim == null || intakeSim.getHeldCount() == 0) return;
+
+    var pose = sm.drivetrain.getState().Pose;
+    double headingRad;
+    double rps;
+    double tof;
+
+    if (isPassing) {
+      // Passing uses a fixed aim angle; SOTM result may not be valid.
+      headingRad = Math.toRadians(sm.getPassAimAngleDeg()) + Math.PI;
+      double dist =
+          pose.getTranslation()
+              .minus(
+                  sm.isBlueAlliance() ? Constants.Field.HOPPER_BLUE : Constants.Field.HOPPER_RED)
+              .getNorm();
+      rps = ShotConstants.SHOOTER_VELOCITY_INTERPOLATOR.getInterpolatedValue(dist);
+      tof = 0.75;
+    } else {
+      var result = sm.getLastSOTMResult();
+      if (!result.isValid()) return;
+      rps = result.shooterRps();
+      tof = result.timeOfFlightSec() > 0 ? result.timeOfFlightSec() : 0.75;
+      // Rear of robot = pose.getRotation() + PI (physically where the shooter points).
+      headingRad = pose.getRotation().getRadians() + Math.PI;
+    }
+
+    // Decompose total launch speed into horizontal + vertical from time-of-flight arc.
+    // RPS_TO_SPEED is calibrated against the real shooter LUT — tune alongside it.
+    final double RPS_TO_SPEED = 0.175;
+    double totalSpeed = rps * RPS_TO_SPEED;
+    double vertSpeed = (9.81 * tof) / 2.0;
+    double horzSpeed = Math.sqrt(Math.max(0, totalSpeed * totalSpeed - vertSpeed * vertSpeed));
+    double pitchRad = Math.atan2(vertSpeed, horzSpeed);
+
+    intakeSim.consume();
+
+    // RebuiltFuelOnFly rotates shooterPositionOnRobot by shooterFacing internally, not by
+    // chassisFacing. For a rear shooter (shooterFacing = pose.rotation + π), passing
+    // (+0.20, 0) lands the spawn 0.20 m behind the chassis center.
+    SimulatedArena.getInstance()
+        .addGamePieceProjectile(
+            new RebuiltFuelOnFly(
+                pose.getTranslation(),
+                new Translation2d(0.20, 0),
+                new ChassisSpeeds(),
+                Rotation2d.fromRadians(headingRad),
+                Meters.of(0.80),
+                MetersPerSecond.of(totalSpeed),
+                Radians.of(pitchRad)));
+
+    simShotCooldown = 25;
   }
 
   @Override
