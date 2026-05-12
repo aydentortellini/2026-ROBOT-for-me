@@ -11,9 +11,15 @@ import static edu.wpi.first.units.Units.Radians;
 import com.ctre.phoenix6.SignalLogger;
 
 // import edu.wpi.first.wpilibj.DataLogManager;
+import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
+import edu.wpi.first.networktables.NetworkTableInstance;
+import edu.wpi.first.networktables.StructArrayPublisher;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -21,7 +27,10 @@ import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import frc.robot.constants.ShotConstants;
 import frc.robot.sim.IntakeSim;
+import frc.robot.subsystems.StateMachine;
 import frc.robot.subsystems.StateMachine.RobotState;
+import java.util.ArrayList;
+import java.util.Collections;
 import org.ironmaple.simulation.SimulatedArena;
 import org.ironmaple.simulation.seasonspecific.rebuilt2026.RebuiltFuelOnFly;
 
@@ -37,6 +46,16 @@ public class Robot extends TimedRobot {
 
   /** Ticks until the next shot is allowed to spawn (~0.5 s @ 50 Hz). */
   private int simShotCooldown = 0;
+
+  /** Fuel piece poses for live AdvantageScope field rendering (NT struct arrays). */
+  private final StructArrayPublisher<Pose3d> simFuelPoses3dPublisher =
+      NetworkTableInstance.getDefault()
+          .getStructArrayTopic("MapleSim/Fuel3d", Pose3d.struct)
+          .publish();
+  private final StructArrayPublisher<Pose2d> simFuelPoses2dPublisher =
+      NetworkTableInstance.getDefault()
+          .getStructArrayTopic("MapleSim/Fuel2d", Pose2d.struct)
+          .publish();
 
   public Robot() {
     SignalLogger.setPath("/U/ctre-logs/");
@@ -119,7 +138,7 @@ public class Robot extends TimedRobot {
 
   @Override
   public void simulationPeriodic() {
-    var sm = m_robotContainer.getStateMachine();
+    StateMachine sm = m_robotContainer.getStateMachine();
 
     // Toggle the intake zone before the arena ticks so contact detection runs with
     // the correct extended/retracted state for this frame.
@@ -134,13 +153,47 @@ public class Robot extends TimedRobot {
     sm.drivetrain.updateSimState();
 
     maybeSpawnShot(sm);
+    publishSimGamePieces(sm);
+  }
+
+  /** Publishes all simulated fuel poses so AdvantageScope can render moving game pieces live. */
+  private void publishSimGamePieces(StateMachine sm) {
+    Pose3d[] arenaFuel = SimulatedArena.getInstance().getGamePiecesArrayByType("Fuel");
+    ArrayList<Pose3d> allFuelPoses = new ArrayList<>(arenaFuel.length + 1);
+    Collections.addAll(allFuelPoses, arenaFuel);
+
+    if (intakeSim != null && intakeSim.getHeldCount() > 0) {
+      allFuelPoses.add(getHeldFuelPose(sm));
+    }
+
+    Pose3d[] fuel3d = allFuelPoses.toArray(Pose3d[]::new);
+    simFuelPoses3dPublisher.set(fuel3d);
+
+    Pose2d[] fuel2d = new Pose2d[fuel3d.length];
+    for (int i = 0; i < fuel3d.length; i++) {
+      fuel2d[i] = fuel3d[i].toPose2d();
+    }
+    simFuelPoses2dPublisher.set(fuel2d);
+
+    SmartDashboard.putNumber("simHeldFuelCount", intakeSim != null ? intakeSim.getHeldCount() : 0);
+    SmartDashboard.putNumber("simFuelVisibleCount", fuel3d.length);
+  }
+
+  /** Approximate in-robot location for a held fuel piece, published for visualization. */
+  private Pose3d getHeldFuelPose(StateMachine sm) {
+    Pose2d robotPose = sm.drivetrain.getState().Pose;
+    Translation2d heldOffsetRobot = new Translation2d(0.28, 0.0);
+    Translation2d heldField = robotPose.getTranslation().plus(heldOffsetRobot.rotateBy(robotPose.getRotation()));
+    return new Pose3d(
+        new Translation3d(heldField.getX(), heldField.getY(), 0.35),
+        new Rotation3d(0, 0, robotPose.getRotation().getRadians()));
   }
 
   /**
    * Spawns a {@link RebuiltFuelOnFly} projectile when the state machine is firing and the
    * intake holds a fuel ball. Cooldown rate-limits to one shot per ~0.5 s.
    */
-  private void maybeSpawnShot(frc.robot.subsystems.StateMachine sm) {
+  private void maybeSpawnShot(StateMachine sm) {
     boolean isShooting = sm.getCurrentState() == RobotState.SHOOTING;
     boolean isPassing = sm.getCurrentState() == RobotState.PASSING;
     if (!isShooting && !isPassing) {
@@ -153,7 +206,10 @@ public class Robot extends TimedRobot {
     }
     if (intakeSim == null || intakeSim.getHeldCount() == 0) return;
 
-    var pose = sm.drivetrain.getState().Pose;
+    Pose2d pose = sm.drivetrain.getState().Pose;
+    ChassisSpeeds robotRelativeSpeeds = sm.drivetrain.getState().Speeds;
+    ChassisSpeeds fieldRelativeSpeeds =
+        ChassisSpeeds.fromRobotRelativeSpeeds(robotRelativeSpeeds, pose.getRotation());
     double headingRad;
     double rps;
     double tof;
@@ -195,7 +251,7 @@ public class Robot extends TimedRobot {
             new RebuiltFuelOnFly(
                 pose.getTranslation(),
                 new Translation2d(0.20, 0),
-                new ChassisSpeeds(),
+                fieldRelativeSpeeds,
                 Rotation2d.fromRadians(headingRad),
                 Meters.of(0.80),
                 MetersPerSecond.of(totalSpeed),

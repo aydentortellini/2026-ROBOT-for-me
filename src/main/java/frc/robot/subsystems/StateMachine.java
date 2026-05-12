@@ -148,6 +148,16 @@ public class StateMachine extends SubsystemBase {
   // }
 
   public void setRobotPose () {
+    // In simulation, MapleSim/CTRE provide odometry truth. Vision fusion can introduce
+    // jitter when no simulated Limelight pipeline is configured.
+    if (RobotBase.isSimulation()) {
+      SmartDashboard.putNumber("currentPoseX", drivetrain.getState().Pose.getX());
+      SmartDashboard.putNumber("currentPoseY", drivetrain.getState().Pose.getY());
+      SmartDashboard.putNumber("currentPoseYaw", drivetrain.getState().Pose.getRotation().getDegrees());
+      SmartDashboard.putString("bestLimelight", "sim");
+      return;
+    }
+
     bestLimelight = vision.getBestLimelight();
 
     // Skip vision when no Limelight has valid data.

@@ -156,7 +156,7 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
    */
   public Swerve(
       SwerveDrivetrainConstants drivetrainConstants, SwerveModuleConstants<?, ?, ?>... modules) {
-    super(drivetrainConstants, modules);
+    super(drivetrainConstants, regulateModulesForSim(modules));
     if (Utils.isSimulation()) {
       initMapleSim();
     }
@@ -180,7 +180,7 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
       SwerveDrivetrainConstants drivetrainConstants,
       double odometryUpdateFrequency,
       SwerveModuleConstants<?, ?, ?>... modules) {
-    super(drivetrainConstants, odometryUpdateFrequency, modules);
+    super(drivetrainConstants, odometryUpdateFrequency, regulateModulesForSim(modules));
     if (Utils.isSimulation()) {
       initMapleSim();
     }
@@ -215,13 +215,24 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
         odometryUpdateFrequency,
         odometryStandardDeviation,
         visionStandardDeviation,
-        modules);
+        regulateModulesForSim(modules));
     if (Utils.isSimulation()) {
       initMapleSim();
     }
     DRIVE_AT_ANGLE.HeadingController = HEADING_CONTROLLER;
     DRIVE_AT_ANGLE.HeadingController.enableContinuousInput(-Math.PI, Math.PI);
     configureAutoBuilder();
+  }
+
+  /** No-op on real robot; in sim strips encoder offsets + inversions so MapleSim can drive
+   * the wheels from a clean zero. Must be static because it runs in {@code super(...)}. */
+  private static SwerveModuleConstants<?, ?, ?>[] regulateModulesForSim(
+      SwerveModuleConstants<?, ?, ?>[] modules) {
+    if (!Utils.isSimulation()) return modules;
+    for (int i = 0; i < modules.length; i++) {
+      modules[i] = PhoenixSimUtil.regulateForSimulation(modules[i]);
+    }
+    return modules;
   }
 
   public void applyRequest(SwerveRequest request) {
@@ -326,7 +337,7 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
             Volts.of(0.2),
             Volts.of(0.2),
             Inches.of(2),
-            KilogramSquareMeters.of(0.03),
+            KilogramSquareMeters.of(0.05),
             COTS.WHEELS.COLSONS.cof);
 
     // Module translations match TunerConstants module positions (±11.5" × ±10.5").
