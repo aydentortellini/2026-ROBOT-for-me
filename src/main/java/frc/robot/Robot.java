@@ -12,6 +12,8 @@ import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
+import frc.robot.sim.IntakeSim;
+import frc.robot.subsystems.StateMachine.RobotState;
 import org.ironmaple.simulation.SimulatedArena;
 
 
@@ -20,6 +22,9 @@ public class Robot extends TimedRobot {
   private Command m_autonomousCommand;
 
   private final RobotContainer m_robotContainer;
+
+  /** Sim-only intake zone. Tracks held fuel and gates shot spawning. */
+  private IntakeSim intakeSim = null;
 
   public Robot() {
     SignalLogger.setPath("/U/ctre-logs/");
@@ -93,17 +98,28 @@ public class Robot extends TimedRobot {
   public void simulationInit() {
     // Populate the Arena2026Rebuilt field with fuel balls and scoring targets.
     SimulatedArena.getInstance().resetFieldForAuto();
+
+    var sm = m_robotContainer.getStateMachine();
+    intakeSim = new IntakeSim(
+        sm.drivetrain.getDriveSimulation(),
+        () -> sm.getCurrentState() == RobotState.INTAKING);
   }
 
   @Override
   public void simulationPeriodic() {
+    var sm = m_robotContainer.getStateMachine();
+
+    // Toggle the intake zone before the arena ticks so contact detection runs with
+    // the correct extended/retracted state for this frame.
+    if (intakeSim != null) intakeSim.update();
+
     // Advance MapleSim physics. Inside this call, each module's SimulatedMotorController
     // pushes encoder positions into the TalonFX/CANcoder sim states so CTRE's odometry
     // sees fresh sensor values.
     SimulatedArena.getInstance().simulationPeriodic();
 
     // Push MapleSim's gyro reading into the Pigeon2 sim state.
-    m_robotContainer.getStateMachine().drivetrain.updateSimState();
+    sm.drivetrain.updateSimState();
   }
 
   @Override
