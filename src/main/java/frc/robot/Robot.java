@@ -7,15 +7,12 @@ package frc.robot;
 import com.ctre.phoenix6.SignalLogger;
 
 // import edu.wpi.first.wpilibj.DataLogManager;
-import edu.wpi.first.math.geometry.Translation3d;
-import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
-import frc.firecontrol.FuelPhysicsSim;
-import frc.robot.subsystems.StateMachine.RobotState;
+import org.ironmaple.simulation.SimulatedArena;
 
 
 
@@ -23,10 +20,6 @@ public class Robot extends TimedRobot {
   private Command m_autonomousCommand;
 
   private final RobotContainer m_robotContainer;
-
-  // Full-field ball physics sim. Only created in simulation.
-  private FuelPhysicsSim ballSim = null;
-  private int simBallCooldown = 0;
 
   public Robot() {
     SignalLogger.setPath("/U/ctre-logs/");
@@ -98,88 +91,19 @@ public class Robot extends TimedRobot {
 
   @Override
   public void simulationInit() {
-    var sm = m_robotContainer.getStateMachine();
-    
-    ballSim = new FuelPhysicsSim("Sim/Fuel");
-    ballSim.enable();
-    ballSim.placeFieldBalls();
-
-    // Configure robot shape for bumper collision and intake detection.
-    // Adjust width/length to match your robot's frame perimeter from the CAD model.
-    ballSim.configureRobot(
-        0.70, // robot width along Y axis (m)
-        0.70, // robot length along X axis (m)
-        0.1016, // bumper height (m)
-        () -> sm.drivetrain.getState().Pose,
-        () -> ChassisSpeeds.fromRobotRelativeSpeeds(
-            sm.drivetrain.getState().Speeds,
-            sm.drivetrain.getState().Pose.getRotation()));
+    // Populate the Arena2026Rebuilt field with fuel balls and scoring targets.
+    SimulatedArena.getInstance().resetFieldForAuto();
   }
 
   @Override
   public void simulationPeriodic() {
-    if (ballSim == null) return;
-    ballSim.tick();
+    // Advance MapleSim physics. Inside this call, each module's SimulatedMotorController
+    // pushes encoder positions into the TalonFX/CANcoder sim states so CTRE's odometry
+    // sees fresh sensor values.
+    SimulatedArena.getInstance().simulationPeriodic();
 
-    var sm = m_robotContainer.getStateMachine();
-    boolean isShooting = sm.getCurrentState() == RobotState.SHOOTING;
-    boolean isPassing  = sm.getCurrentState() == RobotState.PASSING;
-    if (!isShooting && !isPassing) {
-      simBallCooldown = 0;
-      return;
-    }
-
-    if (simBallCooldown > 0) {
-      simBallCooldown--;
-      return;
-    }
-
-    var result = sm.getLastSOTMResult();
-
-    var pose = sm.drivetrain.getState().Pose;
-    double heading;
-    double rps;
-    double tof;
-
-    if (isPassing) {
-      // Passing uses a fixed aim angle; SOTM result may not be valid.
-      heading = Math.toRadians(sm.getPassAimAngleDeg()) + Math.PI;
-      double dist = pose.getTranslation().minus(
-          sm.isBlueAlliance() ? Constants.Field.HOPPER_BLUE : Constants.Field.HOPPER_RED).getNorm();
-      rps = frc.robot.constants.ShotConstants.SHOOTER_VELOCITY_INTERPOLATOR.getInterpolatedValue(dist);
-      tof = 0.75;
-    } else {
-      if (!result.isValid()) return;
-      rps = result.shooterRps();
-      tof = result.timeOfFlightSec() > 0 ? result.timeOfFlightSec() : 0.75;
-      // Rear of robot = pose.getRotation() + PI (physically where the shooter points)
-      heading = pose.getRotation().getRadians() + Math.PI;
-    }
-
-    // Ball speed is derived from shooter RPS so that changing the LUT values
-    // actually affects the trajectory. Vertical comes from TOF (arc shape),
-    // horizontal is whatever remains from the total speed.
-    //   totalSpeed = rps * RPS_TO_SPEED
-    //   vertSpeed  = g * tof / 2  (symmetric parabola)
-    //   horzSpeed  = sqrt(totalSpeed² - vertSpeed²)
-    // RPS_TO_SPEED ≈ 0.175 m/s per RPS — calibrated so default LUT (28.5 RPS at 2.5 m)
-    // produces the correct horizontal distance. Tune alongside the real robot LUT.
-    final double RPS_TO_SPEED = 0.175;
-    double totalSpeed = rps * RPS_TO_SPEED;
-    double vertSpeed  = (9.81 * tof) / 2.0;
-    double horzSpeed  = Math.sqrt(Math.max(0, totalSpeed * totalSpeed - vertSpeed * vertSpeed));
-
-    Translation3d launchPos = new Translation3d(
-        pose.getX() - 0.20 * Math.cos(pose.getRotation().getRadians()), // rear offset
-        pose.getY() - 0.20 * Math.sin(pose.getRotation().getRadians()),
-        0.80); // approximate shooter height (m)
-    Translation3d launchVel = new Translation3d(
-        horzSpeed * Math.cos(heading),
-        horzSpeed * Math.sin(heading),
-        vertSpeed);
-
-    ballSim.launchBall(launchPos, launchVel, rps * 60.0); // convert rps->RPM for spin
-    simBallCooldown = 25; // ~0.5 s between spawned balls
+    // Push MapleSim's gyro reading into the Pigeon2 sim state.
+    m_robotContainer.getStateMachine().drivetrain.updateSimState();
   }
 
   @Override
